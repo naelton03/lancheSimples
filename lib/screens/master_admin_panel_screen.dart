@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/tenant.dart';
-import '../services/mock_data_service.dart';
+import '../services/app_data_service.dart';
 import '../theme/app_theme.dart';
 
 class MasterAdminPanelScreen extends StatefulWidget {
@@ -10,7 +10,7 @@ class MasterAdminPanelScreen extends StatefulWidget {
     required this.dataService,
   });
 
-  final MockDataService dataService;
+  final AppDataService dataService;
 
   @override
   State<MasterAdminPanelScreen> createState() => _MasterAdminPanelScreenState();
@@ -18,6 +18,14 @@ class MasterAdminPanelScreen extends StatefulWidget {
 
 class _MasterAdminPanelScreenState extends State<MasterAdminPanelScreen> {
   final TextEditingController nameController = TextEditingController();
+  late Future<List<Tenant>> tenantsFuture;
+  bool isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    tenantsFuture = widget.dataService.getTenants();
+  }
 
   @override
   void dispose() {
@@ -25,7 +33,13 @@ class _MasterAdminPanelScreenState extends State<MasterAdminPanelScreen> {
     super.dispose();
   }
 
-  void _createTenant() {
+  void _reloadTenants() {
+    setState(() {
+      tenantsFuture = widget.dataService.getTenants();
+    });
+  }
+
+  Future<void> _createTenant() async {
     final name = nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,20 +48,44 @@ class _MasterAdminPanelScreenState extends State<MasterAdminPanelScreen> {
       return;
     }
 
-    final tenant = widget.dataService.createTenant(name);
-    nameController.clear();
+    setState(() {
+      isSaving = true;
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Tenant criado: ${tenant.tenantId}')),
-    );
+    try {
+      final tenant = await widget.dataService.createTenant(name);
+      nameController.clear();
 
-    setState(() {});
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tenant pronto para uso: ${tenant.tenantId}')),
+      );
+
+      setState(() {
+        tenantsFuture = widget.dataService.getTenants();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao criar tenant: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tenants = widget.dataService.getTenants();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Master Admin Panel')),
       body: SafeArea(
@@ -62,7 +100,7 @@ class _MasterAdminPanelScreenState extends State<MasterAdminPanelScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Cadastre apenas o nome do estabelecimento para gerar o tenant_id único.',
+                'O cadastro cria o tenant e faz o primeiro seed do catálogo no banco de dados quando o Firebase estiver ativo.',
               ),
               const SizedBox(height: 16),
               TextField(
@@ -73,45 +111,65 @@ class _MasterAdminPanelScreenState extends State<MasterAdminPanelScreen> {
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: _createTenant,
-                child: const Text('Criar Lanchonete'),
+                onPressed: isSaving ? null : _createTenant,
+                child: Text(isSaving ? 'Criando...' : 'Criar Lanchonete'),
               ),
               const SizedBox(height: 24),
-              Text(
-                'Tenants gerados',
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Tenants gerados',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _reloadTenants,
+                    child: const Text('Atualizar'),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: ListView.separated(
-                  itemCount: tenants.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final Tenant tenant = tenants[index];
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF0F0F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            tenant.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.title,
-                            ),
+                child: FutureBuilder<List<Tenant>>(
+                  future: tenantsFuture,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final tenants = snapshot.data!;
+                    return ListView.separated(
+                      itemCount: tenants.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final Tenant tenant = tenants[index];
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFF0F0F0)),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            tenant.tenantId,
-                            style: const TextStyle(color: AppTheme.subtitle),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                tenant.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.title,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                tenant.tenantId,
+                                style: const TextStyle(color: AppTheme.subtitle),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 ),
