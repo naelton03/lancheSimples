@@ -46,9 +46,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
 
-    final tenantId = tenantIdController.text.trim().toUpperCase();
-    final name = nameController.text.trim();
-    final cpf = cpfController.text.trim();
+    final tenantId = widget.storageService
+        .normalizeTenantId(tenantIdController.text);
+    final name = widget.storageService
+        .normalizeEmployeeName(nameController.text);
+    final cpf = widget.storageService
+        .normalizeEmployeeCpf(cpfController.text);
 
     final isTenantValid = await widget.dataService.isValidTenant(tenantId);
 

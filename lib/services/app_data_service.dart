@@ -179,9 +179,9 @@ class AppDataService {
     }
 
     if (_firestore == null) {
-      return _localComandasController.stream
-          .startWith(0)
-          .map((_) => _buildLocalDraftComanda(normalizedTenantId, operatorName));
+      return _localComandasController.stream.startWith(0).map(
+            (_) => _buildLocalDraftComanda(normalizedTenantId, operatorName),
+          );
     }
 
     return _firestore
@@ -220,8 +220,12 @@ class AppDataService {
 
     if (_firestore == null) {
       final draft = _buildLocalDraftComanda(normalizedTenantId, operatorName);
-      final updatedItems = <Item>[...draft.items, item.copyWith(tenantId: normalizedTenantId)];
-      _localComandas[normalizedTenantId] = updatedItems;
+      final updatedItems = <Item>[
+        ...draft.items,
+        item.copyWith(tenantId: normalizedTenantId),
+      ];
+      _localComandas[_localDraftKey(normalizedTenantId, operatorName)] =
+          updatedItems;
       _localComandasController.add(updatedItems.length);
       return _buildLocalDraftComanda(normalizedTenantId, operatorName);
     }
@@ -271,7 +275,7 @@ class AppDataService {
     }
 
     if (_firestore == null) {
-      _localComandas.remove(normalizedTenantId);
+      _localComandas.remove(_localDraftKey(normalizedTenantId, operatorName));
       _localComandasController.add(0);
       return;
     }
@@ -289,7 +293,9 @@ class AppDataService {
   }
 
   Comanda _buildLocalDraftComanda(String tenantId, String operatorName) {
-    final items = List<Item>.unmodifiable(_localComandas[tenantId] ?? const <Item>[]);
+    final items = List<Item>.unmodifiable(
+      _localComandas[_localDraftKey(tenantId, operatorName)] ?? const <Item>[],
+    );
     return Comanda(
       id: _draftComandaId(operatorName),
       tenantId: tenantId,
@@ -300,6 +306,10 @@ class AppDataService {
       status: 'open',
       totalAmount: items.fold<double>(0, (runningTotal, entry) => runningTotal + entry.price),
     );
+  }
+
+  String _localDraftKey(String tenantId, String operatorName) {
+    return '$tenantId::${_draftComandaId(operatorName)}';
   }
 
   String _draftComandaId(String operatorName) {
