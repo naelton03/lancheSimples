@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String tenantId = '';
   int selectedHomeSection = 0;
   String comandaFilter = 'open';
+  int comandaPageIndex = 0;
   late Future<void> loadFuture;
 
   @override
@@ -526,6 +527,181 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildComandasSelector(List<Comanda> comandas) {
+    const itemsPerPage = 6;
+    final visibleComandas = comandas.isEmpty
+        ? const <Comanda>[]
+        : comandas.toList(growable: false);
+    final totalPages = visibleComandas.isEmpty
+        ? 1
+        : ((visibleComandas.length - 1) ~/ itemsPerPage) + 1;
+    final effectivePageIndex = comandaPageIndex >= totalPages
+        ? totalPages - 1
+        : comandaPageIndex;
+    final pageItems = visibleComandas
+        .skip(effectivePageIndex * itemsPerPage)
+        .take(itemsPerPage)
+        .toList(growable: false);
+    const icons = <IconData>[
+      Icons.fastfood_rounded,
+      Icons.lunch_dining_rounded,
+      Icons.local_pizza_rounded,
+      Icons.ramen_dining_rounded,
+      Icons.emoji_food_beverage_rounded,
+      Icons.icecream_rounded,
+    ];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F1F1F),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Comandas',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                      ),
+                ),
+              ),
+              if (totalPages > 1) ...<Widget>[
+                IconButton(
+                  onPressed: effectivePageIndex > 0
+                      ? () {
+                          setState(() {
+                            comandaPageIndex -= 1;
+                          });
+                        }
+                      : null,
+                  icon: const Icon(Icons.chevron_left, color: Colors.white),
+                ),
+                Text(
+                  '${effectivePageIndex + 1}/$totalPages',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                IconButton(
+                  onPressed: effectivePageIndex < totalPages - 1
+                      ? () {
+                          setState(() {
+                            comandaPageIndex += 1;
+                          });
+                        }
+                      : null,
+                  icon: const Icon(Icons.chevron_right, color: Colors.white),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (pageItems.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2A),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Text(
+                'Nenhuma comanda disponível para este tenant.',
+                style: TextStyle(color: Colors.white70),
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth < 560 ? 2 : 3;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: pageItems.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: crossAxisCount == 2 ? 2.2 : 1.55,
+                  ),
+                  itemBuilder: (context, index) {
+                    final listedComanda = pageItems[index];
+                    final cardColor = listedComanda.status == 'closed'
+                        ? const Color(0xFF6B7280)
+                        : AppTheme.primary;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => _showOpenComandaDetails(listedComanda),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: Icon(
+                                icons[index % icons.length],
+                                color: cardColor,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    listedComanda.identifier,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    listedComanda.customerName?.trim().isNotEmpty == true
+                                        ? listedComanda.customerName!
+                                        : listedComanda.status == 'closed'
+                                            ? 'Fechada'
+                                            : 'Aberta',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
   void _showSummary(Comanda comanda) {
     showModalBottomSheet<void>(
       context: context,
@@ -811,44 +987,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Container(
-                                    width: double.infinity,
-                                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: const Color(0xFFF1F1F1)),
+                                  StreamBuilder<List<Comanda>>(
+                                    stream: widget.dataService.watchComandas(
+                                      tenantId: tenantId,
+                                      filter: 'all',
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        const Text(
-                                          'Comanda atual',
-                                          style: TextStyle(
-                                            color: AppTheme.subtitle,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          comanda.identifier,
-                                          style: Theme.of(context).textTheme.titleLarge,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Abra a comanda com mesa ou nome do cliente para não misturar atendimento.',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        OutlinedButton(
-                                          onPressed: () => _editDraftIdentifier(comanda),
-                                          child: const Text('Identificar comanda'),
-                                        ),
-                                      ],
-                                    ),
+                                    builder: (context, comandasSnapshot) {
+                                      final comandas =
+                                          comandasSnapshot.data ?? const <Comanda>[];
+                                      return _buildComandasSelector(comandas);
+                                    },
                                   ),
                                   const Padding(
                                     padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
