@@ -329,6 +329,182 @@ class AppDataService {
         .delete();
   }
 
+  Stream<List<Comanda>> watchComandas({
+    required String tenantId,
+    String filter = 'all',
+  }) {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return Stream<List<Comanda>>.value(const <Comanda>[]);
+    }
+
+    if (_firestore == null) {
+      return _localDraftController.stream.startWith(0).map(
+            (_) => _listLocalComandas(
+              tenantId: normalizedTenantId,
+              filter: filter,
+            ),
+          );
+    }
+
+    return _firestore!
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Comanda.fromMap(doc.data()))
+              .where(_isMeaningfulComanda)
+              .where((comanda) => _matchesComandaFilter(comanda, filter))
+              .toList(growable: false),
+        );
+  }
+
+  Future<Comanda> createComanda({
+    required String tenantId,
+    required String operatorName,
+    String? customerName,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return _createDraftComanda(
+        tenantId: '',
+        operatorName: operatorName,
+      );
+    }
+
+    final identifier = await _nextComandaIdentifier(normalizedTenantId);
+    final comanda = Comanda(
+      id: _comandaId(identifier),
+      tenantId: normalizedTenantId,
+      identifier: identifier,
+      customerName: customerName?.trim().isEmpty == true
+          ? null
+          : customerName?.trim(),
+      items: const <Item>[],
+      createdBy: operatorName,
+      timestamp: DateTime.now().toUtc(),
+      status: 'open',
+      totalAmount: 0,
+    );
+
+    if (_firestore == null) {
+      _localComandas[_localComandaKey(normalizedTenantId, comanda.id)] = comanda;
+      _localDraftController.add(_localComandas.length);
+      return comanda;
+    }
+
+    await _firestore!
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(comanda.id)
+        .set(comanda.toMap());
+    return comanda;
+  }
+
+  Future<void> closeComanda({
+    required String tenantId,
+    required String comandaId,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return;
+    }
+
+    if (_firestore == null) {
+      final key = _localComandaKey(normalizedTenantId, comandaId);
+      final comanda = _localComandas[key];
+      if (comanda == null) {
+        return;
+      }
+      _localComandas[key] = comanda.copyWith(
+        status: 'closed',
+        timestamp: DateTime.now(),
+      );
+      _localDraftController.add(comanda.totalAmount.round());
+      return;
+    }
+
+    final docRef = _firestore!
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(comandaId);
+    final snapshot = await docRef.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      return;
+    }
+
+    final comanda = Comanda.fromMap(snapshot.data()!);
+    await docRef.set(
+      comanda.copyWith(
+        status: 'closed',
+        timestamp: DateTime.now().toUtc(),
+      ).toMap(),
+    );
+  }
+
+  Future<void> removeItemFromComanda({
+    required String tenantId,
+    required String comandaId,
+    required int itemIndex,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return;
+    }
+
+    if (_firestore == null) {
+      final key = _localComandaKey(normalizedTenantId, comandaId);
+      final comanda = _localComandas[key];
+      if (comanda == null || itemIndex < 0 || itemIndex >= comanda.items.length) {
+        return;
+      }
+
+      final updatedItems = <Item>[...comanda.items]..removeAt(itemIndex);
+      _localComandas[key] = comanda.copyWith(
+        items: updatedItems,
+        totalAmount: updatedItems.fold<double>(
+          0,
+          (runningTotal, entry) => runningTotal + entry.price,
+        ),
+        timestamp: DateTime.now(),
+      );
+      _localDraftController.add(updatedItems.length);
+      return;
+    }
+
+    final docRef = _firestore!
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(comandaId);
+    final snapshot = await docRef.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      return;
+    }
+
+    final comanda = Comanda.fromMap(snapshot.data()!);
+    if (itemIndex < 0 || itemIndex >= comanda.items.length) {
+      return;
+    }
+
+    final updatedItems = <Item>[...comanda.items]..removeAt(itemIndex);
+    await docRef.set(
+      comanda.copyWith(
+        items: updatedItems,
+        totalAmount: updatedItems.fold<double>(
+          0,
+          (runningTotal, entry) => runningTotal + entry.price,
+        ),
+        timestamp: DateTime.now().toUtc(),
+      ).toMap(),
+    );
+  }
+
   List<String> getCategoriesForItems(List<Item> items) {
     return _mockDataService.getCategoriesForItems(items);
   }
@@ -370,6 +546,56 @@ class AppDataService {
     } catch (_) {
       yield _mockDataService.getCatalogForTenant(tenantId);
     }
+  }
+
+  List<Comanda> _listLocalComandas({
+    required String tenantId,
+    required String filter,
+  }) {
+    final comandas = _localComandas.values
+        .where((comanda) => comanda.tenantId == tenantId)
+        .where(_isMeaningfulComanda)
+        .where((comanda) => _matchesComandaFilter(comanda, filter))
+        .toList(growable: false)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return comandas;
+  }
+
+  bool _matchesComandaFilter(Comanda comanda, String filter) {
+    if (filter == 'open') {
+      return comanda.status == 'open';
+    }
+    if (filter == 'closed') {
+      return comanda.status == 'closed';
+    }
+    return true;
+  }
+
+  bool _isMeaningfulComanda(Comanda comanda) {
+    return comanda.items.isNotEmpty ||
+        comanda.customerName?.trim().isNotEmpty == true ||
+        comanda.identifier != defaultDraftIdentifier ||
+        comanda.status == 'closed';
+  }
+
+  Future<String> _nextComandaIdentifier(String tenantId) async {
+    if (_firestore == null) {
+      final existing = _listLocalComandas(tenantId: tenantId, filter: 'all');
+      return _formatComandaIdentifier(existing.length + 1);
+    }
+
+    final snapshot = await _firestore!
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('comandas')
+        .get();
+    return _formatComandaIdentifier(snapshot.docs.length + 1);
+  }
+
+  String _formatComandaIdentifier(int index) => '#${index.toString().padLeft(3, '0')}';
+
+  String _comandaId(String identifier) {
+    return 'comanda-${identifier.replaceAll('#', '').toLowerCase()}';
   }
 
   Future<Comanda> _getOrCreateRemoteDraft(
@@ -441,6 +667,10 @@ class AppDataService {
 
   String _localDraftKey(String tenantId, String operatorName) {
     return '$tenantId::${_draftComandaId(operatorName)}';
+  }
+
+  String _localComandaKey(String tenantId, String comandaId) {
+    return '$tenantId::$comandaId';
   }
 
   String _draftComandaId(String operatorName) {

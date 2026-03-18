@@ -161,5 +161,48 @@ void main() {
         isTrue,
       );
     });
+
+    test('creates and filters comandas locally', () async {
+      final createdComanda = await dataService.createComanda(
+        tenantId: 'TENANT-1001',
+        operatorName: 'Maria',
+        customerName: 'João Silva',
+      );
+
+      final openComandas = await dataService
+          .watchComandas(
+            tenantId: 'TENANT-1001',
+            filter: 'open',
+          )
+          .first;
+
+      expect(createdComanda.identifier, '#001');
+      expect(openComandas, hasLength(1));
+      expect(openComandas.single.customerName, 'João Silva');
+    });
+
+    test('closes comandas locally and exposes them in closed filter', () async {
+      final createdComanda = await dataService.createComanda(
+        tenantId: 'TENANT-1001',
+        operatorName: 'Maria',
+        customerName: 'Maria Souza',
+      );
+
+      await dataService.closeComanda(
+        tenantId: 'TENANT-1001',
+        comandaId: createdComanda.id,
+      );
+
+      final closedComandas = await dataService
+          .watchComandas(
+            tenantId: 'TENANT-1001',
+            filter: 'closed',
+          )
+          .first;
+
+      expect(closedComandas, hasLength(1));
+      expect(closedComandas.single.status, 'closed');
+      expect(closedComandas.single.customerName, 'Maria Souza');
+    });
   });
 }

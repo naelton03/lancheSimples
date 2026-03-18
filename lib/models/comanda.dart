@@ -6,6 +6,7 @@ class Comanda {
     required this.id,
     required this.tenantId,
     required this.identifier,
+    this.customerName,
     required this.items,
     required this.createdBy,
     required this.timestamp,
@@ -16,6 +17,7 @@ class Comanda {
   final String id;
   final String tenantId;
   final String identifier;
+  final String? customerName;
   final List<Item> items;
   final String createdBy;
   final DateTime timestamp;
@@ -26,6 +28,7 @@ class Comanda {
     String? id,
     String? tenantId,
     String? identifier,
+    String? customerName,
     List<Item>? items,
     String? createdBy,
     DateTime? timestamp,
@@ -36,6 +39,7 @@ class Comanda {
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
       identifier: identifier ?? this.identifier,
+      customerName: customerName ?? this.customerName,
       items: items ?? this.items,
       createdBy: createdBy ?? this.createdBy,
       timestamp: timestamp ?? this.timestamp,
@@ -49,6 +53,7 @@ class Comanda {
       'id': id,
       'tenantId': tenantId,
       'identifier': identifier,
+      'customerName': customerName,
       'items': items.map((item) => item.toMap()).toList(),
       'createdBy': createdBy,
       'timestamp': timestamp.toIso8601String(),
@@ -64,6 +69,7 @@ class Comanda {
       id: map['id'] as String? ?? '',
       tenantId: map['tenantId'] as String? ?? '',
       identifier: map['identifier'] as String? ?? '',
+      customerName: map['customerName'] as String?,
       items: rawItems
           .map((item) => Item.fromMap(Map<String, dynamic>.from(item as Map)))
           .toList(),

@@ -50,6 +50,7 @@ void main() {
         id: 'mesa-10',
         tenantId: 'TENANT-1001',
         identifier: 'Mesa 10',
+        customerName: 'Carlos Lima',
         items: <Item>[
           Item(
             id: 'batata-g',
@@ -73,6 +74,7 @@ void main() {
       expect(restored.id, comanda.id);
       expect(restored.tenantId, comanda.tenantId);
       expect(restored.identifier, comanda.identifier);
+      expect(restored.customerName, comanda.customerName);
       expect(restored.createdBy, comanda.createdBy);
       expect(restored.items.first.name, comanda.items.first.name);
       expect(restored.timestamp, comanda.timestamp);
