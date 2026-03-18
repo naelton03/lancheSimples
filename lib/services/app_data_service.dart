@@ -306,6 +306,74 @@ class AppDataService {
     return updatedComanda;
   }
 
+  Future<Comanda> addItemToComanda({
+    required String tenantId,
+    required String comandaId,
+    required String operatorName,
+    required Item item,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return _createDraftComanda(
+        tenantId: '',
+        operatorName: operatorName,
+      );
+    }
+
+    final persistedItem = item.copyWith(
+      tenantId: normalizedTenantId,
+      createdBy: operatorName.trim().isEmpty ? 'Operador' : operatorName.trim(),
+      createdAt: item.createdAt ?? DateTime.now().toUtc(),
+      notes: item.notes?.trim().isEmpty == true ? null : item.notes?.trim(),
+    );
+
+    if (_firestore == null) {
+      final key = _localComandaKey(normalizedTenantId, comandaId);
+      final current = _localComandas[key];
+      if (current == null) {
+        throw StateError('Comanda não encontrada.');
+      }
+
+      final updatedItems = <Item>[...current.items, persistedItem];
+      final updatedComanda = current.copyWith(
+        items: updatedItems,
+        totalAmount: updatedItems.fold<double>(
+          0,
+          (runningTotal, entry) => runningTotal + entry.price,
+        ),
+        timestamp: DateTime.now(),
+      );
+      _localComandas[key] = updatedComanda;
+      _localDraftController.add(updatedComanda.items.length);
+      return updatedComanda;
+    }
+
+    final comandaRef = _firestore!
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(comandaId);
+
+    final snapshot = await comandaRef.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      throw StateError('Comanda não encontrada.');
+    }
+
+    final current = Comanda.fromMap(snapshot.data()!);
+    final updatedItems = <Item>[...current.items, persistedItem];
+    final updatedComanda = current.copyWith(
+      items: updatedItems,
+      totalAmount: updatedItems.fold<double>(
+        0,
+        (runningTotal, entry) => runningTotal + entry.price,
+      ),
+      timestamp: DateTime.now().toUtc(),
+    );
+
+    await comandaRef.set(updatedComanda.toMap());
+    return updatedComanda;
+  }
+
   Future<void> clearDraftComanda({
     required String tenantId,
     required String operatorName,

@@ -204,5 +204,31 @@ void main() {
       expect(closedComandas.single.status, 'closed');
       expect(closedComandas.single.customerName, 'Maria Souza');
     });
+
+    test('adds items to an existing local comanda', () async {
+      final createdComanda = await dataService.createComanda(
+        tenantId: 'TENANT-1001',
+        operatorName: 'Maria',
+        customerName: 'Mesa 4',
+      );
+
+      await dataService.addItemToComanda(
+        tenantId: 'TENANT-1001',
+        comandaId: createdComanda.id,
+        operatorName: 'Maria',
+        item: testItem.copyWith(notes: 'Sem cebola'),
+      );
+
+      final openComandas = await dataService
+          .watchComandas(
+            tenantId: 'TENANT-1001',
+            filter: 'open',
+          )
+          .first;
+
+      expect(openComandas.single.items, hasLength(1));
+      expect(openComandas.single.items.single.notes, 'Sem cebola');
+      expect(openComandas.single.totalAmount, 15);
+    });
   });
 }

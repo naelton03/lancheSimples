@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int selectedHomeSection = 0;
   String comandaFilter = 'open';
   int comandaPageIndex = 0;
+  String? selectedComandaId;
   late Future<void> loadFuture;
 
   @override
@@ -59,7 +60,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _addItem(Item item, Comanda comanda) async {
+  Future<void> _addItem(Item item, Comanda? comanda) async {
+    if (comanda == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione ou crie uma comanda aberta antes de lançar itens.'),
+        ),
+      );
+      return;
+    }
+
     final notesController = TextEditingController();
     final shouldAddItem = await showModalBottomSheet<bool>(
           context: context,
@@ -118,10 +128,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      await widget.dataService.addItemToDraftComanda(
+      await widget.dataService.addItemToComanda(
         tenantId: tenantId,
+        comandaId: comanda.id,
         operatorName: employeeName,
-        draftIdentifier: comanda.identifier,
         item: item.copyWith(notes: notes.isEmpty ? null : notes),
       );
 
@@ -146,17 +156,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _resetDevice() async {
     await widget.storageService.clearOnboarding();
     widget.onResetDevice();
-  }
-
-  Future<void> _clearCurrentDraft() async {
-    await widget.dataService.clearDraftComanda(
-      tenantId: tenantId,
-      operatorName: employeeName,
-    );
-    if (!mounted) {
-      return;
-    }
-    Navigator.of(context).pop();
   }
 
   Future<void> _openCatalogCreationDialog({required bool isCombo}) async {
@@ -327,8 +326,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    setState(() {
+      selectedComandaId = comanda.id;
+      selectedHomeSection = 0;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Comanda ${comanda.identifier} criada com sucesso.')),
+      SnackBar(
+        content: Text(
+          'Comanda ${comanda.identifier} criada com sucesso e definida como atual.',
+        ),
+      ),
     );
   }
 
@@ -464,7 +472,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildComandasSelector(List<Comanda> comandas) {
+  void _selectCurrentComanda(Comanda comanda) {
+    setState(() {
+      selectedComandaId = comanda.id;
+      selectedHomeSection = 0;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Comanda ${comanda.identifier} selecionada para lançamento.')),
+    );
+  }
+
+  Widget _buildComandasSelector(List<Comanda> comandas, Comanda? activeComanda) {
     const itemsPerPage = 6;
     final visibleComandas = comandas.isEmpty
         ? const <Comanda>[]
@@ -570,14 +589,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     final cardColor = listedComanda.status == 'closed'
                         ? const Color(0xFF6B7280)
                         : AppTheme.primary;
+                    final isSelected = activeComanda?.id == listedComanda.id;
                     return InkWell(
                       borderRadius: BorderRadius.circular(20),
-                      onTap: () => _showOpenComandaDetails(listedComanda),
+                      onTap: () => _selectCurrentComanda(listedComanda),
+                      onLongPress: () => _showOpenComandaDetails(listedComanda),
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: cardColor,
                           borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
                         ),
                         child: Row(
                           children: <Widget>[
@@ -737,13 +761,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                if (comanda.items.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _clearCurrentDraft,
-                    child: const Text('Limpar comanda atual'),
-                  ),
-                ],
               ],
             ),
           ),
@@ -780,23 +797,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     .where((item) => item.category == effectiveSelectedCategory)
                     .toList(growable: false);
 
-            return StreamBuilder<Comanda>(
-              stream: widget.dataService.watchDraftComanda(
+            return StreamBuilder<List<Comanda>>(
+              stream: widget.dataService.watchComandas(
                 tenantId: tenantId,
-                operatorName: employeeName,
+                filter: 'all',
               ),
               builder: (context, comandaSnapshot) {
-                final comanda = comandaSnapshot.data ??
-                    Comanda(
-                      id: 'draft-$employeeName',
-                      tenantId: tenantId,
-                      identifier: AppDataService.defaultDraftIdentifier,
-                      items: const <Item>[],
-                      createdBy: employeeName,
-                      timestamp: DateTime.now(),
-                      status: 'open',
-                      totalAmount: 0,
-                    );
+                final allComandas = comandaSnapshot.data ?? const <Comanda>[];
+                final openComandas = allComandas
+                    .where((listedComanda) => listedComanda.status == 'open')
+                    .toList(growable: false);
+                Comanda? activeComanda;
+
+                for (final listedComanda in openComandas) {
+                  if (listedComanda.id == selectedComandaId) {
+                    activeComanda = listedComanda;
+                    break;
+                  }
+                }
+
+                activeComanda ??=
+                    openComandas.isNotEmpty ? openComandas.first : null;
+
+                final filteredComandas = comandaFilter == 'all'
+                    ? allComandas
+                    : allComandas
+                        .where((listedComanda) => listedComanda.status == comandaFilter)
+                        .toList(growable: false);
 
                 return Scaffold(
                   appBar: AppBar(
@@ -924,16 +951,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  StreamBuilder<List<Comanda>>(
-                                    stream: widget.dataService.watchComandas(
-                                      tenantId: tenantId,
-                                      filter: 'all',
-                                    ),
-                                    builder: (context, comandasSnapshot) {
-                                      final comandas =
-                                          comandasSnapshot.data ?? const <Comanda>[];
-                                      return _buildComandasSelector(comandas);
-                                    },
+                                  _buildComandasSelector(
+                                    openComandas,
+                                    activeComanda,
                                   ),
                                   const Padding(
                                     padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -993,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               final item = filteredItems[index];
                                               return ItemCard(
                                                 item: item,
-                                                onAdd: () => _addItem(item, comanda),
+                                                onAdd: () => _addItem(item, activeComanda),
                                               );
                                             },
                                           ),
@@ -1066,42 +1086,31 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                   Expanded(
-                                    child: StreamBuilder<List<Comanda>>(
-                                      stream: widget.dataService.watchComandas(
-                                        tenantId: tenantId,
-                                        filter: comandaFilter,
-                                      ),
-                                      builder: (context, comandasSnapshot) {
-                                        final comandas =
-                                            comandasSnapshot.data ?? const <Comanda>[];
-                                        if (comandasSnapshot.connectionState ==
+                                    child: comandaSnapshot.connectionState ==
                                                 ConnectionState.waiting &&
-                                            !comandasSnapshot.hasData) {
-                                          return const Center(
+                                            !comandaSnapshot.hasData
+                                        ? const Center(
                                             child: CircularProgressIndicator(),
-                                          );
-                                        }
-
-                                        if (comandas.isEmpty) {
-                                          return const Center(
+                                          )
+                                        : filteredComandas.isEmpty
+                                        ? const Center(
                                             child: Text(
                                               'Nenhuma comanda encontrada para este filtro.',
                                             ),
-                                          );
-                                        }
-
-                                        return ListView.separated(
+                                          )
+                                        : ListView.separated(
                                           padding: const EdgeInsets.fromLTRB(
                                             16,
                                             8,
                                             16,
                                             24,
                                           ),
-                                          itemCount: comandas.length,
+                                          itemCount: filteredComandas.length,
                                           separatorBuilder: (_, __) =>
                                               const SizedBox(height: 12),
                                           itemBuilder: (context, index) {
-                                            final listedComanda = comandas[index];
+                                            final listedComanda =
+                                                filteredComandas[index];
                                             final previewItems = listedComanda.items
                                                 .take(2)
                                                 .toList(growable: false);
@@ -1228,6 +1237,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                                           ),
                                                         ),
                                                         if (listedComanda.status == 'open')
+                                                          OutlinedButton(
+                                                            onPressed: () =>
+                                                                _selectCurrentComanda(
+                                                              listedComanda,
+                                                            ),
+                                                            child: const Text(
+                                                              'Usar no catálogo',
+                                                            ),
+                                                          ),
+                                                        if (listedComanda.status == 'open')
                                                           ElevatedButton(
                                                             onPressed: () =>
                                                                 _closeComanda(
@@ -1244,9 +1263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               ),
                                             );
                                           },
-                                        );
-                                      },
-                                    ),
+                                        ),
                                   ),
                                 ],
                               ),
@@ -1280,12 +1297,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       const Text(
-                                        'Comanda atual',
+                                        'Comanda selecionada',
                                         style: TextStyle(color: AppTheme.subtitle),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        comanda.identifier,
+                                        activeComanda?.identifier ??
+                                            'Nenhuma comanda aberta selecionada',
                                         style: const TextStyle(
                                           color: AppTheme.subtitle,
                                           fontWeight: FontWeight.w600,
@@ -1295,7 +1313,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'R\$ ${comanda.totalAmount.toStringAsFixed(2).replaceAll('.', ',')}',
+                                        'R\$ ${activeComanda?.totalAmount.toStringAsFixed(2).replaceAll('.', ',') ?? '0,00'}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w700,
                                           color: AppTheme.title,
@@ -1309,11 +1327,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 SizedBox(
                                   width: 132,
                                   child: ElevatedButton(
-                                    onPressed: () => _showSummary(comanda),
+                                    onPressed: activeComanda == null
+                                        ? () {
+                                            setState(() {
+                                              selectedHomeSection = 1;
+                                            });
+                                          }
+                                        : () => _showSummary(activeComanda!),
                                     child: Text(
-                                      comanda.items.isEmpty
+                                      activeComanda == null
+                                          ? 'Comandas'
+                                          : activeComanda.items.isEmpty
                                           ? 'Resumo'
-                                          : 'Resumo (${comanda.items.length})',
+                                          : 'Resumo (${activeComanda.items.length})',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),

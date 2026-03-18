@@ -100,6 +100,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
   final LocalStorageService storageService = LocalStorageService();
   late final AppDataService dataService;
   late Future<bool> onboardingFuture;
+  bool hasActiveSession = false;
 
   @override
   void initState() {
@@ -118,7 +119,21 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
   void _refreshOnboardingStatus() {
     setState(() {
+      hasActiveSession = false;
       onboardingFuture = storageService.isOnboardingComplete();
+    });
+  }
+
+  void _handleOnboardingCompleted() {
+    setState(() {
+      hasActiveSession = true;
+      onboardingFuture = storageService.isOnboardingComplete();
+    });
+  }
+
+  void _startSession() {
+    setState(() {
+      hasActiveSession = true;
     });
   }
 
@@ -133,7 +148,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
           );
         }
 
-        if (snapshot.data == true) {
+        if (snapshot.data == true && hasActiveSession) {
           return HomeScreen(
             dataService: dataService,
             storageService: storageService,
@@ -146,7 +161,9 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
           dataService: dataService,
           storageService: storageService,
           firebaseState: widget.firebaseState,
-          onOnboardingCompleted: _refreshOnboardingStatus,
+          isDeviceConfigured: snapshot.data == true,
+          onEnterHome: _startSession,
+          onOnboardingCompleted: _handleOnboardingCompleted,
         );
       },
     );

@@ -15,12 +15,16 @@ class LoginScreen extends StatefulWidget {
     required this.dataService,
     required this.storageService,
     required this.firebaseState,
+    required this.isDeviceConfigured,
+    required this.onEnterHome,
     required this.onOnboardingCompleted,
   });
 
   final AppDataService dataService;
   final LocalStorageService storageService;
   final FirebaseInitializationState firebaseState;
+  final bool isDeviceConfigured;
+  final VoidCallback onEnterHome;
   final VoidCallback onOnboardingCompleted;
 
   @override
@@ -30,12 +34,14 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController tenantIdController = TextEditingController();
   late Future<List<Tenant>> tenantsFuture;
+  late Future<_SavedDeviceAccess?> savedDeviceAccessFuture;
   int logoTapCount = 0;
 
   @override
   void initState() {
     super.initState();
     tenantsFuture = widget.dataService.getTenants();
+    savedDeviceAccessFuture = _loadSavedDeviceAccess();
   }
 
   @override
@@ -47,7 +53,24 @@ class _LoginScreenState extends State<LoginScreen> {
   void _reloadTenants() {
     setState(() {
       tenantsFuture = widget.dataService.getTenants();
+      savedDeviceAccessFuture = _loadSavedDeviceAccess();
     });
+  }
+
+  Future<_SavedDeviceAccess?> _loadSavedDeviceAccess() async {
+    final tenantId = await widget.storageService.getTenantId();
+    final employeeName = await widget.storageService.getEmployeeName();
+    final normalizedTenantId = tenantId?.trim().toUpperCase() ?? '';
+    final normalizedEmployeeName = employeeName?.trim() ?? '';
+
+    if (normalizedTenantId.isEmpty || normalizedEmployeeName.isEmpty) {
+      return null;
+    }
+
+    return _SavedDeviceAccess(
+      tenantId: normalizedTenantId,
+      employeeName: normalizedEmployeeName,
+    );
   }
 
   void _openOnboarding() {
@@ -77,6 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       _reloadTenants();
     });
+  }
+
+  void _handleEnterHome() {
+    widget.onEnterHome();
   }
 
   Future<void> _handleHiddenAccess() async {
@@ -205,19 +232,85 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            TextField(
-              controller: tenantIdController,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Tenant ID',
-                hintText: 'Ex.: TENANT-1001',
+            if (widget.isDeviceConfigured)
+              FutureBuilder<_SavedDeviceAccess?>(
+                future: savedDeviceAccessFuture,
+                builder: (context, snapshot) {
+                  final savedAccess = snapshot.data;
+
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFECECEC)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Dispositivo pronto para uso',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          savedAccess == null
+                              ? 'O onboarding já foi concluído neste dispositivo.'
+                              : 'Tenant ${savedAccess.tenantId} • operador ${savedAccess.employeeName}.',
+                          style: const TextStyle(color: AppTheme.subtitle),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _handleEnterHome,
+                            child: const Text('Entrar no PDV'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              if (savedAccess != null) {
+                                tenantIdController.text = savedAccess.tenantId;
+                              }
+                              _openOnboarding();
+                            },
+                            child: const Text('Atualizar onboarding'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              )
+            else ...<Widget>[
+              TextField(
+                controller: tenantIdController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Tenant ID',
+                  hintText: 'Ex.: TENANT-1001',
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _openOnboarding,
-              child: const Text('Continuar'),
-            ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _openOnboarding,
+                  child: const Text('Continuar'),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             const Text(
               'Dica: toque repetidamente no logo ou pressione e segure '
@@ -269,4 +362,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+class _SavedDeviceAccess {
+  const _SavedDeviceAccess({
+    required this.tenantId,
+    required this.employeeName,
+  });
+
+  final String tenantId;
+  final String employeeName;
 }
