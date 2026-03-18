@@ -41,7 +41,7 @@ class ItemCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Lançado por ${item.createdBy}',
+                '${item.category} • cadastrado por ${item.createdBy}',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppTheme.subtitle,

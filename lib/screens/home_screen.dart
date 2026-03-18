@@ -46,7 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     setState(() {
-      employeeName = storedName?.trim().isNotEmpty == true ? storedName!.trim() : 'Operador';
+      employeeName =
+          storedName?.trim().isNotEmpty == true ? storedName!.trim() : 'Operador';
       tenantId = storedTenantId?.trim().toUpperCase() ?? '';
     });
 
@@ -55,12 +56,70 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _addItem(Item item) async {
+  Future<void> _addItem(Item item, Comanda comanda) async {
+    final notesController = TextEditingController();
+    final shouldAddItem = await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Adicione uma observação opcional para este lançamento.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: notesController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Observação do item',
+                        hintText: 'Ex.: sem cebola, ponto da carne, retirar gelo',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Adicionar à comanda'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+
+    final notes = notesController.text.trim();
+    notesController.dispose();
+
+    if (!shouldAddItem) {
+      return;
+    }
+
     try {
       await widget.dataService.addItemToDraftComanda(
         tenantId: tenantId,
         operatorName: employeeName,
-        item: item,
+        draftIdentifier: comanda.identifier,
+        item: item.copyWith(notes: notes.isEmpty ? null : notes),
       );
 
       if (!mounted) {
@@ -95,6 +154,186 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     Navigator.of(context).pop();
+  }
+
+  Future<void> _editDraftIdentifier(Comanda comanda) async {
+    final identifierController = TextEditingController(
+      text: comanda.identifier == AppDataService.defaultDraftIdentifier
+          ? ''
+          : comanda.identifier,
+    );
+
+    final shouldSave = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Abrir / identificar comanda'),
+              content: TextField(
+                controller: identifierController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Mesa ou cliente',
+                  hintText: 'Ex.: Mesa 7 ou Ana Paula',
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    final identifier = identifierController.text.trim();
+    identifierController.dispose();
+
+    if (!shouldSave) {
+      return;
+    }
+
+    await widget.dataService.updateDraftComandaIdentifier(
+      tenantId: tenantId,
+      operatorName: employeeName,
+      identifier: identifier,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          identifier.isEmpty
+              ? 'Comanda voltou ao estado padrão.'
+              : 'Comanda identificada como $identifier.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCatalogCreationDialog({required bool isCombo}) async {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final categoryController = TextEditingController(
+      text: isCombo ? 'Combos' : 'Lanches',
+    );
+
+    final shouldCreate = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text(isCombo ? 'Cadastrar combo' : 'Cadastrar item'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: isCombo ? 'Nome do combo' : 'Nome do item',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: priceController,
+                      decoration: const InputDecoration(
+                        labelText: 'Preço',
+                        hintText: 'Ex.: 19,90',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: categoryController,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoria',
+                        hintText: 'Ex.: Lanches, Bebidas, Combos',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      isCombo
+                          ? 'Use esta opção para cadastrar ofertas promocionais como um item de catálogo do tipo combo.'
+                          : 'Cadastre itens rápidos com nome, preço, categoria e autoria do operador.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!shouldCreate) {
+      nameController.dispose();
+      priceController.dispose();
+      categoryController.dispose();
+      return;
+    }
+
+    final name = nameController.text.trim();
+    final rawPrice = priceController.text.trim().replaceAll(',', '.');
+    final category = categoryController.text.trim();
+    final price = double.tryParse(rawPrice);
+    nameController.dispose();
+    priceController.dispose();
+    categoryController.dispose();
+
+    if (name.isEmpty || price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe nome e preço válido para cadastrar no catálogo.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final item = await widget.dataService.createCatalogItem(
+        tenantId: tenantId,
+        name: name,
+        price: price,
+        category: category,
+        createdBy: employeeName,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${item.name} cadastrado no catálogo.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao cadastrar item: $error')),
+      );
+    }
   }
 
   void _showSummary(Comanda comanda) {
@@ -133,6 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemBuilder: (context, index) {
                         final item = comanda.items[index];
                         return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Expanded(
                               child: Column(
@@ -147,12 +387,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Operador: ${comanda.createdBy}',
+                                    'Lançado por ${item.createdBy}',
                                     style: const TextStyle(
                                       color: AppTheme.subtitle,
                                       fontSize: 12,
                                     ),
                                   ),
+                                  if (item.notes?.trim().isNotEmpty == true) ...<Widget>[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Obs.: ${item.notes!.trim()}',
+                                      style: const TextStyle(
+                                        color: AppTheme.subtitle,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -215,10 +465,13 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, itemsSnapshot) {
             final allItems = itemsSnapshot.data ?? const <Item>[];
             final categories = widget.dataService.getCategoriesForItems(allItems);
-            final filteredItems = selectedCategory == 'Todos'
+            final effectiveSelectedCategory = categories.contains(selectedCategory)
+                ? selectedCategory
+                : 'Todos';
+            final filteredItems = effectiveSelectedCategory == 'Todos'
                 ? allItems
                 : allItems
-                    .where((item) => item.category == selectedCategory)
+                    .where((item) => item.category == effectiveSelectedCategory)
                     .toList(growable: false);
 
             return StreamBuilder<Comanda>(
@@ -231,7 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Comanda(
                       id: 'draft-$employeeName',
                       tenantId: tenantId,
-                      identifier: 'COMANDA EM ABERTO',
+                      identifier: AppDataService.defaultDraftIdentifier,
                       items: const <Item>[],
                       createdBy: employeeName,
                       timestamp: DateTime.now(),
@@ -270,8 +523,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (value == 'reset') {
                             await _resetDevice();
                           }
+                          if (value == 'new_item') {
+                            await _openCatalogCreationDialog(isCombo: false);
+                          }
+                          if (value == 'new_combo') {
+                            await _openCatalogCreationDialog(isCombo: true);
+                          }
                         },
                         itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                            value: 'new_item',
+                            child: Text('Cadastrar item'),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'new_combo',
+                            child: Text('Cadastrar combo'),
+                          ),
                           PopupMenuItem<String>(
                             value: 'reset',
                             child: Text('Refazer onboarding'),
@@ -303,6 +570,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: const TextStyle(color: AppTheme.subtitle),
                         ),
                       ),
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFF1F1F1)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            const Text(
+                              'Comanda atual',
+                              style: TextStyle(
+                                color: AppTheme.subtitle,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              comanda.identifier,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Abra a comanda com mesa ou nome do cliente para não misturar atendimento.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: () => _editDraftIdentifier(comanda),
+                              child: const Text('Identificar comanda'),
+                            ),
+                          ],
+                        ),
+                      ),
                       const Padding(
                         padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
                         child: Text(
@@ -319,7 +623,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: Row(
                           children: categories.map((category) {
-                            final selected = category == selectedCategory;
+                            final selected = category == effectiveSelectedCategory;
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ChoiceChip(
@@ -352,7 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final item = filteredItems[index];
                                   return ItemCard(
                                     item: item,
-                                    onAdd: () => _addItem(item),
+                                    onAdd: () => _addItem(item, comanda),
                                   );
                                 },
                               ),
@@ -374,9 +678,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
-                                const Text(
-                                  'Total da comanda atual',
-                                  style: TextStyle(color: AppTheme.subtitle),
+                                Text(
+                                  comanda.identifier,
+                                  style: const TextStyle(color: AppTheme.subtitle),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(

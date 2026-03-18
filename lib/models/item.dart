@@ -8,6 +8,7 @@ class Item {
     required this.price,
     required this.category,
     required this.createdBy,
+    this.notes,
     this.createdAt,
   });
 
@@ -17,6 +18,7 @@ class Item {
   final double price;
   final String category;
   final String createdBy;
+  final String? notes;
   final DateTime? createdAt;
 
   Item copyWith({
@@ -26,6 +28,7 @@ class Item {
     double? price,
     String? category,
     String? createdBy,
+    String? notes,
     DateTime? createdAt,
   }) {
     return Item(
@@ -35,6 +38,7 @@ class Item {
       price: price ?? this.price,
       category: category ?? this.category,
       createdBy: createdBy ?? this.createdBy,
+      notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -47,6 +51,7 @@ class Item {
       'price': price,
       'category': category,
       'createdBy': createdBy,
+      'notes': notes,
       'createdAt': createdAt?.toIso8601String(),
     };
   }
@@ -59,6 +64,7 @@ class Item {
       price: parseDouble(map['price']),
       category: map['category'] as String? ?? '',
       createdBy: map['createdBy'] as String? ?? '',
+      notes: map['notes'] as String?,
       createdAt: parseNullableDateTime(map['createdAt']),
     );
   }

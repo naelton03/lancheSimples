@@ -14,16 +14,21 @@ class AppDataService {
   })  : _firestore = firestore,
         _mockDataService = mockDataService ?? MockDataService();
 
+  static const String defaultDraftIdentifier = 'COMANDA EM ABERTO';
+
   final FirebaseFirestore? _firestore;
   final MockDataService _mockDataService;
-  final StreamController<int> _localComandasController =
+  final StreamController<int> _localDraftController =
       StreamController<int>.broadcast();
-  final Map<String, List<Item>> _localComandas = <String, List<Item>>{};
+  final StreamController<int> _localCatalogController =
+      StreamController<int>.broadcast();
+  final Map<String, Comanda> _localComandas = <String, Comanda>{};
 
   bool get isRemoteEnabled => _firestore != null;
 
   void dispose() {
-    _localComandasController.close();
+    _localDraftController.close();
+    _localCatalogController.close();
   }
 
   Future<List<Tenant>> getTenants() async {
@@ -100,9 +105,9 @@ class AppDataService {
     }
 
     if (_firestore == null) {
-      return Stream<List<Item>>.value(
-        _mockDataService.getCatalogForTenant(normalizedTenantId),
-      );
+      return _localCatalogController.stream.startWith(0).map(
+            (_) => _mockDataService.getCatalogForTenant(normalizedTenantId),
+          );
     }
 
     final stream = _firestore
@@ -134,6 +139,41 @@ class AppDataService {
     });
   }
 
+  Future<Item> createCatalogItem({
+    required String tenantId,
+    required String name,
+    required double price,
+    required String category,
+    required String createdBy,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    final normalizedName = name.trim();
+    final normalizedCategory = category.trim().isEmpty ? 'Geral' : category.trim();
+    final newItem = Item(
+      id: _catalogItemId(normalizedName),
+      tenantId: normalizedTenantId,
+      name: normalizedName,
+      price: price,
+      category: normalizedCategory,
+      createdBy: createdBy.trim().isEmpty ? 'Operador' : createdBy.trim(),
+      createdAt: DateTime.now().toUtc(),
+    );
+
+    if (_firestore == null) {
+      final createdItem = _mockDataService.createCatalogItem(newItem);
+      _localCatalogController.add(createdItem.hashCode);
+      return createdItem;
+    }
+
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('catalog')
+        .doc(newItem.id)
+        .set(newItem.toMap());
+    return newItem;
+  }
+
   Future<void> seedCatalogIfNeeded(String tenantId, {required String createdBy}) async {
     final normalizedTenantId = tenantId.trim().toUpperCase();
     if (normalizedTenantId.isEmpty || _firestore == null) {
@@ -152,7 +192,10 @@ class AppDataService {
 
     final batch = _firestore.batch();
     for (final item in _mockDataService.getCatalogForTenant(normalizedTenantId)) {
-      final seededItem = item.copyWith(createdBy: createdBy, createdAt: DateTime.now().toUtc());
+      final seededItem = item.copyWith(
+        createdBy: createdBy,
+        createdAt: DateTime.now().toUtc(),
+      );
       batch.set(catalogCollection.doc(seededItem.id), seededItem.toMap());
     }
     await batch.commit();
@@ -165,21 +208,15 @@ class AppDataService {
     final normalizedTenantId = tenantId.trim().toUpperCase();
     if (normalizedTenantId.isEmpty) {
       return Stream<Comanda>.value(
-        Comanda(
-          id: _draftComandaId(operatorName),
+        _createDraftComanda(
           tenantId: '',
-          identifier: 'COMANDA EM ABERTO',
-          items: const <Item>[],
-          createdBy: operatorName,
-          timestamp: DateTime.now(),
-          status: 'open',
-          totalAmount: 0,
+          operatorName: operatorName,
         ),
       );
     }
 
     if (_firestore == null) {
-      return _localComandasController.stream.startWith(0).map(
+      return _localDraftController.stream.startWith(0).map(
             (_) => _buildLocalDraftComanda(normalizedTenantId, operatorName),
           );
     }
@@ -192,15 +229,9 @@ class AppDataService {
         .snapshots()
         .map((snapshot) {
       if (!snapshot.exists || snapshot.data() == null) {
-        return Comanda(
-          id: _draftComandaId(operatorName),
+        return _createDraftComanda(
           tenantId: normalizedTenantId,
-          identifier: 'COMANDA EM ABERTO',
-          items: const <Item>[],
-          createdBy: operatorName,
-          timestamp: DateTime.now(),
-          status: 'open',
-          totalAmount: 0,
+          operatorName: operatorName,
         );
       }
 
@@ -208,60 +239,96 @@ class AppDataService {
     });
   }
 
+  Future<void> updateDraftComandaIdentifier({
+    required String tenantId,
+    required String operatorName,
+    required String identifier,
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    if (normalizedTenantId.isEmpty) {
+      return;
+    }
+
+    final sanitizedIdentifier = _sanitizeDraftIdentifier(identifier);
+    if (_firestore == null) {
+      final current = _buildLocalDraftComanda(normalizedTenantId, operatorName);
+      _localComandas[_localDraftKey(normalizedTenantId, operatorName)] =
+          current.copyWith(
+        identifier: sanitizedIdentifier,
+        timestamp: DateTime.now(),
+      );
+      _localDraftController.add(sanitizedIdentifier.length);
+      return;
+    }
+
+    final current = await _getOrCreateRemoteDraft(normalizedTenantId, operatorName);
+    final updatedDraft = current.copyWith(
+      identifier: sanitizedIdentifier,
+      timestamp: DateTime.now().toUtc(),
+    );
+
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(_draftComandaId(operatorName))
+        .set(updatedDraft.toMap());
+  }
+
   Future<Comanda> addItemToDraftComanda({
     required String tenantId,
     required String operatorName,
     required Item item,
+    String? draftIdentifier,
   }) async {
     final normalizedTenantId = tenantId.trim().toUpperCase();
     if (normalizedTenantId.isEmpty) {
       return _buildLocalDraftComanda(normalizedTenantId, operatorName);
     }
 
-    if (_firestore == null) {
-      final draft = _buildLocalDraftComanda(normalizedTenantId, operatorName);
-      final updatedItems = <Item>[
-        ...draft.items,
-        item.copyWith(tenantId: normalizedTenantId),
-      ];
-      _localComandas[_localDraftKey(normalizedTenantId, operatorName)] =
-          updatedItems;
-      _localComandasController.add(updatedItems.length);
-      return _buildLocalDraftComanda(normalizedTenantId, operatorName);
-    }
-
-    final comandaRef = _firestore
-        .collection('tenants')
-        .doc(normalizedTenantId)
-        .collection('comandas')
-        .doc(_draftComandaId(operatorName));
-
-    final existing = await comandaRef.get();
-    final current = existing.exists && existing.data() != null
-        ? Comanda.fromMap(existing.data()!)
-        : Comanda(
-            id: _draftComandaId(operatorName),
-            tenantId: normalizedTenantId,
-            identifier: 'COMANDA EM ABERTO',
-            items: const <Item>[],
-            createdBy: operatorName,
-            timestamp: DateTime.now().toUtc(),
-            status: 'open',
-            totalAmount: 0,
-          );
-
     final persistedItem = item.copyWith(
       tenantId: normalizedTenantId,
+      createdBy: operatorName,
       createdAt: item.createdAt ?? DateTime.now().toUtc(),
+      notes: item.notes?.trim().isEmpty == true ? null : item.notes?.trim(),
     );
+
+    if (_firestore == null) {
+      final draft = _buildLocalDraftComanda(normalizedTenantId, operatorName);
+      final updatedItems = <Item>[...draft.items, persistedItem];
+      final updatedDraft = draft.copyWith(
+        identifier: _sanitizeDraftIdentifier(draftIdentifier ?? draft.identifier),
+        items: updatedItems,
+        totalAmount: updatedItems.fold<double>(
+          0,
+          (runningTotal, entry) => runningTotal + entry.price,
+        ),
+        timestamp: DateTime.now(),
+      );
+      _localComandas[_localDraftKey(normalizedTenantId, operatorName)] =
+          updatedDraft;
+      _localDraftController.add(updatedItems.length);
+      return updatedDraft;
+    }
+
+    final current = await _getOrCreateRemoteDraft(normalizedTenantId, operatorName);
     final updatedItems = <Item>[...current.items, persistedItem];
     final updatedComanda = current.copyWith(
+      identifier: _sanitizeDraftIdentifier(draftIdentifier ?? current.identifier),
       items: updatedItems,
-      totalAmount: updatedItems.fold<double>(0, (runningTotal, entry) => runningTotal + entry.price),
+      totalAmount: updatedItems.fold<double>(
+        0,
+        (runningTotal, entry) => runningTotal + entry.price,
+      ),
       timestamp: DateTime.now().toUtc(),
     );
 
-    await comandaRef.set(updatedComanda.toMap());
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('comandas')
+        .doc(_draftComandaId(operatorName))
+        .set(updatedComanda.toMap());
     return updatedComanda;
   }
 
@@ -276,7 +343,7 @@ class AppDataService {
 
     if (_firestore == null) {
       _localComandas.remove(_localDraftKey(normalizedTenantId, operatorName));
-      _localComandasController.add(0);
+      _localDraftController.add(0);
       return;
     }
 
@@ -292,20 +359,71 @@ class AppDataService {
     return _mockDataService.getCategoriesForItems(items);
   }
 
-  Comanda _buildLocalDraftComanda(String tenantId, String operatorName) {
-    final items = List<Item>.unmodifiable(
-      _localComandas[_localDraftKey(tenantId, operatorName)] ?? const <Item>[],
+  Future<Comanda> _getOrCreateRemoteDraft(
+    String tenantId,
+    String operatorName,
+  ) async {
+    final comandaRef = _firestore!
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('comandas')
+        .doc(_draftComandaId(operatorName));
+    final existing = await comandaRef.get();
+
+    if (existing.exists && existing.data() != null) {
+      return Comanda.fromMap(existing.data()!);
+    }
+
+    return _createDraftComanda(
+      tenantId: tenantId,
+      operatorName: operatorName,
     );
+  }
+
+  Comanda _buildLocalDraftComanda(String tenantId, String operatorName) {
+    return _localComandas[_localDraftKey(tenantId, operatorName)] ??
+        _createDraftComanda(
+          tenantId: tenantId,
+          operatorName: operatorName,
+        );
+  }
+
+  Comanda _createDraftComanda({
+    required String tenantId,
+    required String operatorName,
+    String? identifier,
+    List<Item> items = const <Item>[],
+  }) {
     return Comanda(
       id: _draftComandaId(operatorName),
       tenantId: tenantId,
-      identifier: 'COMANDA EM ABERTO',
+      identifier: _sanitizeDraftIdentifier(identifier),
       items: items,
       createdBy: operatorName,
       timestamp: DateTime.now(),
       status: 'open',
-      totalAmount: items.fold<double>(0, (runningTotal, entry) => runningTotal + entry.price),
+      totalAmount: items.fold<double>(
+        0,
+        (runningTotal, entry) => runningTotal + entry.price,
+      ),
     );
+  }
+
+  String _sanitizeDraftIdentifier(String? identifier) {
+    final normalizedIdentifier = identifier?.trim() ?? '';
+    if (normalizedIdentifier.isEmpty) {
+      return defaultDraftIdentifier;
+    }
+    return normalizedIdentifier;
+  }
+
+  String _catalogItemId(String name) {
+    final normalizedName = name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return '${normalizedName.isEmpty ? 'item' : normalizedName}-${DateTime.now().millisecondsSinceEpoch}';
   }
 
   String _localDraftKey(String tenantId, String operatorName) {

@@ -37,7 +37,7 @@ void main() {
     });
   });
 
-  group('AppDataService local draft comanda', () {
+  group('AppDataService local flows', () {
     late AppDataService dataService;
 
     const testItem = Item(
@@ -113,6 +113,53 @@ void main() {
 
       expect(mariaDraft.items, isEmpty);
       expect(joaoDraft.items, hasLength(1));
+    });
+
+    test('persists draft identifier and item notes locally', () async {
+      await dataService.updateDraftComandaIdentifier(
+        tenantId: 'TENANT-1001',
+        operatorName: 'Maria',
+        identifier: 'Mesa 7',
+      );
+
+      await dataService.addItemToDraftComanda(
+        tenantId: 'TENANT-1001',
+        operatorName: 'Maria',
+        draftIdentifier: 'Mesa 7',
+        item: testItem.copyWith(notes: 'Sem cebola'),
+      );
+
+      final mariaDraft = await dataService
+          .watchDraftComanda(
+            tenantId: 'TENANT-1001',
+            operatorName: 'Maria',
+          )
+          .first;
+
+      expect(mariaDraft.identifier, 'Mesa 7');
+      expect(mariaDraft.items.single.notes, 'Sem cebola');
+      expect(mariaDraft.items.single.createdBy, 'Maria');
+    });
+
+    test('creates catalog items in local mode', () async {
+      final createdItem = await dataService.createCatalogItem(
+        tenantId: 'TENANT-1001',
+        name: 'Brownie',
+        price: 9.5,
+        category: 'Sobremesas',
+        createdBy: 'Maria',
+      );
+
+      final catalog = await dataService.watchCatalog('TENANT-1001').first;
+
+      expect(createdItem.tenantId, 'TENANT-1001');
+      expect(catalog.any((item) => item.name == 'Brownie'), isTrue);
+      expect(
+        catalog.any(
+          (item) => item.name == 'Brownie' && item.createdBy == 'Maria',
+        ),
+        isTrue,
+      );
     });
   });
 }

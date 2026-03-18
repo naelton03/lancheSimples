@@ -60,17 +60,45 @@ class MockDataService {
     ),
   ];
 
+  final Map<String, List<Item>> _customCatalogByTenant = <String, List<Item>>{};
+
   List<Tenant> getTenants() {
     final tenants = List<Tenant>.from(_tenants);
-    tenants.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    tenants.sort(
+      (a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)),
+    );
     return List<Tenant>.unmodifiable(tenants);
   }
 
   List<Item> getCatalogForTenant(String tenantId) {
     final normalizedTenantId = tenantId.trim().toUpperCase();
-    return _catalogTemplate
+    final seededItems = _catalogTemplate
         .map((item) => item.copyWith(tenantId: normalizedTenantId))
         .toList(growable: false);
+    final customItems = _customCatalogByTenant[normalizedTenantId] ?? const <Item>[];
+
+    final catalog = <Item>[...seededItems, ...customItems]
+      ..sort(
+        (a, b) {
+          final categorySort = a.category.compareTo(b.category);
+          if (categorySort != 0) {
+            return categorySort;
+          }
+          return a.name.compareTo(b.name);
+        },
+      );
+    return List<Item>.unmodifiable(catalog);
+  }
+
+  Item createCatalogItem(Item item) {
+    final normalizedTenantId = item.tenantId.trim().toUpperCase();
+    final tenantItems = _customCatalogByTenant.putIfAbsent(
+      normalizedTenantId,
+      () => <Item>[],
+    );
+    final createdItem = item.copyWith(tenantId: normalizedTenantId);
+    tenantItems.add(createdItem);
+    return createdItem;
   }
 
   List<Item> getItemsByCategory(String tenantId, String? category) {
