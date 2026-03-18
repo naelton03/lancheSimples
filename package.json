@@ -1,0 +1,11 @@
+{
+  "name": "lanche-simples-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed:firestore": "node scripts/seed_firestore.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

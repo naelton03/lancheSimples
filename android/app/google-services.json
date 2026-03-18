@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1026970483734",
+    "project_id": "lanchesimples-d101b",
+    "storage_bucket": "lanchesimples-d101b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1026970483734:android:5807ac1247c05ef3af4937",
+        "android_client_info": {
+          "package_name": "com.example.lanche_simples"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_30VUqC4aNYZONz-TuElEtqxgKSbOW_I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

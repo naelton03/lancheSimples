@@ -41,4 +41,11 @@ class LocalStorageService {
       await prefs.remove(_employeeCpfKey);
     }
   }
+
+  Future<void> clearOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tenantIdKey);
+    await prefs.remove(_employeeNameKey);
+    await prefs.remove(_employeeCpfKey);
+  }
 }
