@@ -1,0 +1,11 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+android/local.properties
+service-account*.json
+firebase-debug.log
+node_modules/
+
+android/gradle/wrapper/gradle-wrapper.jar

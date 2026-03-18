@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tenants/{tenantId} {
+      allow read, write: if true;
+
+      match /catalog/{itemId} {
+        allow read, write: if true;
+      }
+
+      match /comandas/{comandaId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}
