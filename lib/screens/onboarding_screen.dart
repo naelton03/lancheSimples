@@ -50,10 +50,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final name = nameController.text.trim();
     final cpf = cpfController.text.trim();
 
-    if (!await widget.dataService.isValidTenant(tenantId)) {
-      if (!mounted) {
-        return;
-      }
+    final isTenantValid = await widget.dataService.isValidTenant(tenantId);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!isTenantValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tenant ID inválido.')),
       );

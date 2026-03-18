@@ -253,7 +253,7 @@ class AppDataService {
     final updatedItems = <Item>[...current.items, persistedItem];
     final updatedComanda = current.copyWith(
       items: updatedItems,
-      totalAmount: updatedItems.fold<double>(0, (sum, entry) => sum + entry.price),
+      totalAmount: updatedItems.fold<double>(0, (runningTotal, entry) => runningTotal + entry.price),
       timestamp: DateTime.now().toUtc(),
     );
 
@@ -298,7 +298,7 @@ class AppDataService {
       createdBy: operatorName,
       timestamp: DateTime.now(),
       status: 'open',
-      totalAmount: items.fold<double>(0, (sum, entry) => sum + entry.price),
+      totalAmount: items.fold<double>(0, (runningTotal, entry) => runningTotal + entry.price),
     );
   }
 

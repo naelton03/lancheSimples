@@ -72,6 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     )
         .then((_) {
+      if (!mounted) {
+        return;
+      }
       _reloadTenants();
     });
   }
@@ -118,12 +121,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     codeController.dispose();
 
-    if (!mounted || !isAuthorized) {
-      if (!isAuthorized) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Código inválido.')),
-        );
-      }
+    if (!mounted) {
+      return;
+    }
+
+    if (!isAuthorized) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Código inválido.')),
+      );
       return;
     }
 
@@ -132,6 +137,10 @@ class _LoginScreenState extends State<LoginScreen> {
         builder: (_) => MasterAdminPanelScreen(dataService: widget.dataService),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
 
     _reloadTenants();
   }

@@ -19,7 +19,7 @@ class DefaultFirebaseOptions {
   );
 
   static bool get hasValidConfiguration {
-    const values = <String>[
+    final values = <String?>[
       android.apiKey,
       android.appId,
       android.messagingSenderId,
@@ -30,11 +30,11 @@ class DefaultFirebaseOptions {
       ios.messagingSenderId,
       ios.projectId,
       ios.storageBucket,
-      ios.iosBundleId!,
+      ios.iosBundleId,
     ];
 
     return values.every(
-      (value) => value.isNotEmpty && !value.startsWith('YOUR_'),
+      (value) => value != null && value.isNotEmpty && !value.startsWith('YOUR_'),
     );
   }
 }
