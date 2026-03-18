@@ -300,6 +300,10 @@ class _HomeScreenState extends State<HomeScreen> {
     priceController.dispose();
     categoryController.dispose();
 
+    if (!mounted) {
+      return;
+    }
+
     if (name.isEmpty || price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
