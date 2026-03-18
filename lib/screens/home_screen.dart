@@ -468,6 +468,9 @@ class _HomeScreenState extends State<HomeScreen> {
           stream: widget.dataService.watchCatalog(tenantId),
           builder: (context, itemsSnapshot) {
             final allItems = itemsSnapshot.data ?? const <Item>[];
+            final isCatalogLoading =
+                itemsSnapshot.connectionState == ConnectionState.waiting &&
+                    !itemsSnapshot.hasData;
             final categories = widget.dataService.getCategoriesForItems(allItems);
             final effectiveSelectedCategory = categories.contains(selectedCategory)
                 ? selectedCategory
@@ -597,6 +600,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               comanda.identifier,
                               style: Theme.of(context).textTheme.titleLarge,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -650,7 +655,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       Expanded(
-                        child: filteredItems.isEmpty
+                        child: isCatalogLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : filteredItems.isEmpty
                             ? const Center(
                                 child: Text('Nenhum item cadastrado para este tenant.'),
                               )
@@ -676,15 +685,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         border: Border(top: BorderSide(color: Color(0xFFEFEFEF))),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
+                                const Text(
+                                  'Comanda atual',
+                                  style: TextStyle(color: AppTheme.subtitle),
+                                ),
+                                const SizedBox(height: 4),
                                 Text(
                                   comanda.identifier,
-                                  style: const TextStyle(color: AppTheme.subtitle),
+                                  style: const TextStyle(
+                                    color: AppTheme.subtitle,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -698,12 +718,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                           ),
-                          ElevatedButton(
-                            onPressed: () => _showSummary(comanda),
-                            child: Text(
-                              comanda.items.isEmpty
-                                  ? 'Resumo'
-                                  : 'Resumo (${comanda.items.length})',
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 132,
+                            child: ElevatedButton(
+                              onPressed: () => _showSummary(comanda),
+                              child: Text(
+                                comanda.items.isEmpty
+                                    ? 'Resumo'
+                                    : 'Resumo (${comanda.items.length})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                         ],

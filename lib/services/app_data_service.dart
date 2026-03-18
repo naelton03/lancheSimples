@@ -110,33 +110,7 @@ class AppDataService {
           );
     }
 
-    final stream = _firestore
-        .collection('tenants')
-        .doc(normalizedTenantId)
-        .collection('catalog')
-        .orderBy('category')
-        .orderBy('name')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map(
-              (doc) => Item.fromMap(
-                <String, dynamic>{
-                  ...doc.data(),
-                  'id': doc.id,
-                  'tenantId': normalizedTenantId,
-                },
-              ),
-            )
-            .toList(growable: false));
-
-    return stream.asyncMap((items) async {
-      if (items.isNotEmpty) {
-        return items;
-      }
-
-      await seedCatalogIfNeeded(normalizedTenantId, createdBy: 'Sistema');
-      return _mockDataService.getCatalogForTenant(normalizedTenantId);
-    });
+    return _watchRemoteCatalog(normalizedTenantId);
   }
 
   Future<Item> createCatalogItem({
@@ -357,6 +331,45 @@ class AppDataService {
 
   List<String> getCategoriesForItems(List<Item> items) {
     return _mockDataService.getCategoriesForItems(items);
+  }
+
+  Stream<List<Item>> _watchRemoteCatalog(String tenantId) async* {
+    try {
+      await for (final snapshot in _firestore!
+          .collection('tenants')
+          .doc(tenantId)
+          .collection('catalog')
+          .orderBy('category')
+          .orderBy('name')
+          .snapshots()) {
+        final items = snapshot.docs
+            .map(
+              (doc) => Item.fromMap(
+                <String, dynamic>{
+                  ...doc.data(),
+                  'id': doc.id,
+                  'tenantId': tenantId,
+                },
+              ),
+            )
+            .toList(growable: false);
+
+        if (items.isNotEmpty) {
+          yield items;
+          continue;
+        }
+
+        try {
+          await seedCatalogIfNeeded(tenantId, createdBy: 'Sistema');
+        } catch (_) {
+          // Cai no fallback local logo abaixo.
+        }
+
+        yield _mockDataService.getCatalogForTenant(tenantId);
+      }
+    } catch (_) {
+      yield _mockDataService.getCatalogForTenant(tenantId);
+    }
   }
 
   Future<Comanda> _getOrCreateRemoteDraft(
