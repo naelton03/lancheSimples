@@ -159,69 +159,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).pop();
   }
 
-  Future<void> _editDraftIdentifier(Comanda comanda) async {
-    final identifierController = TextEditingController(
-      text: comanda.identifier == AppDataService.defaultDraftIdentifier
-          ? ''
-          : comanda.identifier,
-    );
-
-    final shouldSave = await showDialog<bool>(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Abrir / identificar comanda'),
-              content: TextField(
-                controller: identifierController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Mesa ou cliente',
-                  hintText: 'Ex.: Mesa 7 ou Ana Paula',
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Salvar'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-
-    final identifier = identifierController.text.trim();
-    identifierController.dispose();
-
-    if (!shouldSave) {
-      return;
-    }
-
-    await widget.dataService.updateDraftComandaIdentifier(
-      tenantId: tenantId,
-      operatorName: employeeName,
-      identifier: identifier,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          identifier.isEmpty
-              ? 'Comanda voltou ao estado padrão.'
-              : 'Comanda identificada como $identifier.',
-        ),
-      ),
-    );
-  }
-
   Future<void> _openCatalogCreationDialog({required bool isCombo}) async {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
