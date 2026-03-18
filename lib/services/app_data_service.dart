@@ -347,7 +347,7 @@ class AppDataService {
           );
     }
 
-    return _firestore!
+    return _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
         .collection('comandas')
@@ -396,7 +396,7 @@ class AppDataService {
       return comanda;
     }
 
-    await _firestore!
+    await _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
         .collection('comandas')
@@ -428,7 +428,7 @@ class AppDataService {
       return;
     }
 
-    final docRef = _firestore!
+    final docRef = _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
         .collection('comandas')
@@ -477,7 +477,7 @@ class AppDataService {
       return;
     }
 
-    final docRef = _firestore!
+    final docRef = _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
         .collection('comandas')
@@ -584,7 +584,7 @@ class AppDataService {
       return _formatComandaIdentifier(existing.length + 1);
     }
 
-    final snapshot = await _firestore!
+    final snapshot = await _firestore
         .collection('tenants')
         .doc(tenantId)
         .collection('comandas')
