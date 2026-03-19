@@ -23,6 +23,7 @@ class AppDataService {
   final StreamController<int> _localCatalogController =
       StreamController<int>.broadcast();
   final Map<String, Comanda> _localComandas = <String, Comanda>{};
+  final Map<String, List<Item>> _catalogCacheByTenant = <String, List<Item>>{};
 
   bool get isRemoteEnabled => _firestore != null;
 
@@ -135,6 +136,8 @@ class AppDataService {
 
     if (_firestore == null) {
       final createdItem = _mockDataService.createCatalogItem(newItem);
+      _catalogCacheByTenant[normalizedTenantId] =
+          _buildSortedCatalog(_mockDataService.getCatalogForTenant(normalizedTenantId));
       _localCatalogController.add(createdItem.hashCode);
       return createdItem;
     }
@@ -145,6 +148,14 @@ class AppDataService {
         .collection('catalog')
         .doc(newItem.id)
         .set(newItem.toMap());
+    final cachedCatalog = _catalogCacheByTenant[normalizedTenantId] ??
+        _mockDataService.getCatalogForTenant(normalizedTenantId);
+    _catalogCacheByTenant[normalizedTenantId] = _buildSortedCatalog(
+      <Item>[
+        ...cachedCatalog.where((item) => item.id != newItem.id),
+        newItem,
+      ],
+    );
     return newItem;
   }
 
@@ -599,7 +610,9 @@ class AppDataService {
             .toList(growable: false);
 
         if (items.isNotEmpty) {
-          yield items;
+          final sortedItems = _buildSortedCatalog(items);
+          _catalogCacheByTenant[tenantId] = sortedItems;
+          yield sortedItems;
           continue;
         }
 
@@ -609,11 +622,27 @@ class AppDataService {
           // Cai no fallback local logo abaixo.
         }
 
-        yield _mockDataService.getCatalogForTenant(tenantId);
+        yield _catalogCacheByTenant[tenantId] ??
+            _buildSortedCatalog(_mockDataService.getCatalogForTenant(tenantId));
       }
     } catch (_) {
-      yield _mockDataService.getCatalogForTenant(tenantId);
+      yield _catalogCacheByTenant[tenantId] ??
+          _buildSortedCatalog(_mockDataService.getCatalogForTenant(tenantId));
     }
+  }
+
+  List<Item> _buildSortedCatalog(List<Item> items) {
+    final catalog = List<Item>.from(items)
+      ..sort(
+        (a, b) {
+          final categorySort = a.category.compareTo(b.category);
+          if (categorySort != 0) {
+            return categorySort;
+          }
+          return a.name.compareTo(b.name);
+        },
+      );
+    return List<Item>.unmodifiable(catalog);
   }
 
   List<Comanda> _listLocalComandas({
