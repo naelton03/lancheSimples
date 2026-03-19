@@ -498,19 +498,10 @@ class _HomeScreenState extends State<HomeScreen> {
         .skip(effectivePageIndex * itemsPerPage)
         .take(itemsPerPage)
         .toList(growable: false);
-    const icons = <IconData>[
-      Icons.fastfood_rounded,
-      Icons.lunch_dining_rounded,
-      Icons.local_pizza_rounded,
-      Icons.ramen_dining_rounded,
-      Icons.emoji_food_beverage_rounded,
-      Icons.icecream_rounded,
-    ];
-
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1F1F1F),
         borderRadius: BorderRadius.circular(24),
@@ -556,11 +547,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (pageItems.isEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A2A),
                 borderRadius: BorderRadius.circular(18),
@@ -571,90 +562,97 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
           else
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth < 560 ? 2 : 3;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: pageItems.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: crossAxisCount == 2 ? 2.2 : 1.55,
-                  ),
-                  itemBuilder: (context, index) {
-                    final listedComanda = pageItems[index];
-                    final cardColor = listedComanda.status == 'closed'
-                        ? const Color(0xFF6B7280)
-                        : AppTheme.primary;
-                    final isSelected = activeComanda?.id == listedComanda.id;
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _selectCurrentComanda(listedComanda),
-                      onLongPress: () => _showOpenComandaDetails(listedComanda),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(20),
-                          border: isSelected
-                              ? Border.all(color: Colors.white, width: 2)
-                              : null,
-                        ),
-                        child: Row(
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: pageItems.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1.75,
+              ),
+              itemBuilder: (context, index) {
+                final listedComanda = pageItems[index];
+                final cardColor = listedComanda.status == 'closed'
+                    ? const Color(0xFF6B7280)
+                    : AppTheme.primary;
+                final isSelected = activeComanda?.id == listedComanda.id;
+                final subtitle =
+                    listedComanda.customerName?.trim().isNotEmpty == true
+                        ? listedComanda.customerName!
+                        : listedComanda.status == 'closed'
+                            ? 'Fechada'
+                            : 'Aberta';
+                return InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => _selectCurrentComanda(listedComanda),
+                  onLongPress: () => _showOpenComandaDetails(listedComanda),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(18),
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 2)
+                          : null,
+                      boxShadow: isSelected
+                          ? const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x26000000),
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
                           children: <Widget>[
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: Icon(
-                                icons[index % icons.length],
-                                color: cardColor,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
                             Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    listedComanda.identifier,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    listedComanda.customerName?.trim().isNotEmpty == true
-                                        ? listedComanda.customerName!
-                                        : listedComanda.status == 'closed'
-                                            ? 'Fechada'
-                                            : 'Aberta',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                listedComanda.identifier,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
+                            if (isSelected)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            height: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
