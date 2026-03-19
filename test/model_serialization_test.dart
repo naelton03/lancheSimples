@@ -28,6 +28,7 @@ void main() {
         price: 15.5,
         category: 'Lanches',
         createdBy: 'Maria',
+        comboItems: <String>['Batata G', 'Refrigerante Lata'],
         notes: 'Sem cebola',
         createdAt: DateTime.parse('2026-03-18T12:00:00.000Z'),
       );
@@ -41,6 +42,7 @@ void main() {
       expect(restored.price, item.price);
       expect(restored.category, item.category);
       expect(restored.createdBy, item.createdBy);
+      expect(restored.comboItems, item.comboItems);
       expect(restored.notes, item.notes);
       expect(restored.createdAt, item.createdAt);
     });

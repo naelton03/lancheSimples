@@ -162,6 +162,34 @@ void main() {
       );
     });
 
+    test('updates catalog items locally including combo composition', () async {
+      final createdItem = await dataService.createCatalogItem(
+        tenantId: 'TENANT-1001',
+        name: 'Combo Almoço',
+        price: 22,
+        category: 'Combos',
+        createdBy: 'Maria',
+        comboItems: const <String>['X-Burger', 'Refrigerante Lata'],
+      );
+
+      final updatedItem = await dataService.updateCatalogItem(
+        tenantId: 'TENANT-1001',
+        itemId: createdItem.id,
+        name: 'Combo Almoço Executivo',
+        price: 24,
+        category: 'Combos',
+        createdBy: 'Maria',
+        comboItems: const <String>['X-Burger', 'Batata G'],
+      );
+
+      final catalog = await dataService.watchCatalog('TENANT-1001').first;
+      final savedItem = catalog.firstWhere((item) => item.id == createdItem.id);
+
+      expect(updatedItem.name, 'Combo Almoço Executivo');
+      expect(savedItem.price, 24);
+      expect(savedItem.comboItems, const <String>['X-Burger', 'Batata G']);
+    });
+
     test('creates and filters comandas locally', () async {
       final createdComanda = await dataService.createComanda(
         tenantId: 'TENANT-1001',

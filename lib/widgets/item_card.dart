@@ -8,10 +8,12 @@ class ItemCard extends StatelessWidget {
     super.key,
     required this.item,
     required this.onAdd,
+    this.onEdit,
   });
 
   final Item item;
   final VoidCallback onAdd;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -47,18 +49,43 @@ class ItemCard extends StatelessWidget {
                   color: AppTheme.subtitle,
                 ),
               ),
+              if (item.comboItems.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 6),
+                Text(
+                  item.comboItems.length <= 2
+                      ? 'Inclui: ${item.comboItems.join(' • ')}'
+                      : 'Inclui: ${item.comboItems.take(2).join(' • ')} +${item.comboItems.length - 2}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.subtitle,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-        trailing: Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: onAdd,
-          ),
+        trailing: Wrap(
+          spacing: 8,
+          children: <Widget>[
+            if (onEdit != null)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: AppTheme.subtitle),
+                onPressed: onEdit,
+                tooltip: 'Editar item',
+              ),
+            Container(
+              decoration: const BoxDecoration(
+                color: AppTheme.primary,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.add, color: Colors.white),
+                onPressed: onAdd,
+              ),
+            ),
+          ],
         ),
       ),
     );

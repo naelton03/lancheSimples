@@ -158,16 +158,34 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openCatalogCreationDialog({
     required bool isCombo,
     List<Item> catalogItems = const <Item>[],
+    Item? existingItem,
   }) async {
+    final effectiveIsCombo =
+        isCombo ||
+        existingItem?.comboItems.isNotEmpty == true ||
+        existingItem?.category.trim().toLowerCase() == 'combos';
     final nameController = TextEditingController();
     final priceController = TextEditingController();
     final categoryController = TextEditingController(
-      text: isCombo ? 'Combos' : 'Lanches',
+      text: effectiveIsCombo ? 'Combos' : existingItem?.category ?? 'Lanches',
     );
     final comboSourceItems = catalogItems
         .where((item) => item.category.trim().toLowerCase() != 'combos')
         .toList(growable: false);
     final selectedComboItemIds = <String>{};
+
+    if (existingItem != null) {
+      nameController.text = existingItem.name;
+      priceController.text =
+          existingItem.price.toStringAsFixed(2).replaceAll('.', ',');
+      if (existingItem.comboItems.isNotEmpty) {
+        selectedComboItemIds.addAll(
+          comboSourceItems
+              .where((item) => existingItem.comboItems.contains(item.name))
+              .map((item) => item.id),
+        );
+      }
+    }
 
     final shouldCreate = await showDialog<bool>(
           context: context,
@@ -183,7 +201,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
 
                 return AlertDialog(
-                  title: Text(isCombo ? 'Cadastrar combo' : 'Cadastrar item'),
+                  title: Text(
+                    effectiveIsCombo
+                        ? existingItem == null
+                            ? 'Cadastrar combo'
+                            : 'Editar combo'
+                        : existingItem == null
+                            ? 'Cadastrar item'
+                            : 'Editar item',
+                  ),
                   content: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -192,11 +218,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         TextField(
                           controller: nameController,
                           decoration: InputDecoration(
-                            labelText: isCombo ? 'Nome do combo' : 'Nome do item',
+                            labelText:
+                                effectiveIsCombo ? 'Nome do combo' : 'Nome do item',
                           ),
                         ),
                         const SizedBox(height: 12),
-                        if (isCombo) ...<Widget>[
+                        if (effectiveIsCombo) ...<Widget>[
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
@@ -340,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final selectedComboItems = comboSourceItems
         .where((item) => selectedComboItemIds.contains(item.id))
         .toList(growable: false);
-    final category = isCombo ? 'Combos' : categoryController.text.trim();
+    final category = effectiveIsCombo ? 'Combos' : categoryController.text.trim();
     final double? price =
         double.tryParse(priceController.text.trim().replaceAll(',', '.'));
     nameController.dispose();
@@ -351,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (isCombo) {
+    if (effectiveIsCombo) {
       if (name.isEmpty || selectedComboItems.isEmpty || price == null || price <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -370,20 +397,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final item = await widget.dataService.createCatalogItem(
-        tenantId: tenantId,
-        name: name,
-        price: price,
-        category: category,
-        createdBy: employeeName,
-      );
+      final comboItemNames = selectedComboItems
+          .map((item) => item.name)
+          .toList(growable: false);
+      final item = existingItem == null
+          ? await widget.dataService.createCatalogItem(
+              tenantId: tenantId,
+              name: name,
+              price: price,
+              category: category,
+              createdBy: employeeName,
+              comboItems: effectiveIsCombo ? comboItemNames : const <String>[],
+            )
+          : await widget.dataService.updateCatalogItem(
+              tenantId: tenantId,
+              itemId: existingItem.id,
+              name: name,
+              price: price,
+              category: category,
+              createdBy: employeeName,
+              comboItems: effectiveIsCombo ? comboItemNames : const <String>[],
+            );
 
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${item.name} cadastrado no catálogo.')),
+        SnackBar(
+          content: Text(
+            existingItem == null
+                ? '${item.name} cadastrado no catálogo.'
+                : '${item.name} atualizado no catálogo.',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) {
@@ -472,6 +519,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _comboItemsLabel(List<String> comboItems) {
+    if (comboItems.isEmpty) {
+      return '';
+    }
+    if (comboItems.length <= 2) {
+      return comboItems.join(' • ');
+    }
+    return '${comboItems.take(2).join(' • ')} +${comboItems.length - 2}';
+  }
+
   void _showOpenComandaDetails(Comanda comanda) {
     showModalBottomSheet<void>(
       context: context,
@@ -529,6 +586,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontSize: 12,
                                     ),
                                   ),
+                                  if (item.comboItems.isNotEmpty) ...<Widget>[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Combo: ${_comboItemsLabel(item.comboItems)}',
+                                      style: const TextStyle(
+                                        color: AppTheme.subtitle,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -835,6 +902,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontSize: 12,
                                     ),
                                   ),
+                                  if (item.comboItems.isNotEmpty) ...<Widget>[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Combo: ${_comboItemsLabel(item.comboItems)}',
+                                      style: const TextStyle(
+                                        color: AppTheme.subtitle,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                   if (item.notes?.trim().isNotEmpty == true) ...<Widget>[
                                     const SizedBox(height: 4),
                                     Text(
@@ -1115,6 +1192,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                               return ItemCard(
                                                 item: item,
                                                 onAdd: () => _addItem(item, activeComanda),
+                                                onEdit: () => _openCatalogCreationDialog(
+                                                  isCombo: item.comboItems.isNotEmpty ||
+                                                      item.category
+                                                              .trim()
+                                                              .toLowerCase() ==
+                                                          'combos',
+                                                  catalogItems: allItems,
+                                                  existingItem: item,
+                                                ),
                                               );
                                             },
                                           ),

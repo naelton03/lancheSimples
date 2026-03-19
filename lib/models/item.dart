@@ -8,6 +8,7 @@ class Item {
     required this.price,
     required this.category,
     required this.createdBy,
+    this.comboItems = const <String>[],
     this.notes,
     this.createdAt,
   });
@@ -18,6 +19,7 @@ class Item {
   final double price;
   final String category;
   final String createdBy;
+  final List<String> comboItems;
   final String? notes;
   final DateTime? createdAt;
 
@@ -28,6 +30,7 @@ class Item {
     double? price,
     String? category,
     String? createdBy,
+    List<String>? comboItems,
     String? notes,
     DateTime? createdAt,
   }) {
@@ -38,6 +41,7 @@ class Item {
       price: price ?? this.price,
       category: category ?? this.category,
       createdBy: createdBy ?? this.createdBy,
+      comboItems: comboItems ?? this.comboItems,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -51,6 +55,7 @@ class Item {
       'price': price,
       'category': category,
       'createdBy': createdBy,
+      'comboItems': comboItems,
       'notes': notes,
       'createdAt': createdAt?.toIso8601String(),
     };
@@ -64,6 +69,10 @@ class Item {
       price: parseDouble(map['price']),
       category: map['category'] as String? ?? '',
       createdBy: map['createdBy'] as String? ?? '',
+      comboItems: ((map['comboItems'] as List<dynamic>?) ?? const <dynamic>[])
+          .map((entry) => entry.toString())
+          .where((entry) => entry.trim().isNotEmpty)
+          .toList(growable: false),
       notes: map['notes'] as String?,
       createdAt: parseNullableDateTime(map['createdAt']),
     );

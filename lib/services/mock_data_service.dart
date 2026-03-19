@@ -77,7 +77,12 @@ class MockDataService {
         .toList(growable: false);
     final customItems = _customCatalogByTenant[normalizedTenantId] ?? const <Item>[];
 
-    final catalog = <Item>[...seededItems, ...customItems]
+    final catalogById = <String, Item>{
+      for (final item in seededItems) item.id: item,
+      for (final item in customItems) item.id: item,
+    };
+
+    final catalog = catalogById.values.toList(growable: false)
       ..sort(
         (a, b) {
           final categorySort = a.category.compareTo(b.category);
@@ -99,6 +104,22 @@ class MockDataService {
     final createdItem = item.copyWith(tenantId: normalizedTenantId);
     tenantItems.add(createdItem);
     return createdItem;
+  }
+
+  Item updateCatalogItem(Item item) {
+    final normalizedTenantId = item.tenantId.trim().toUpperCase();
+    final tenantItems = _customCatalogByTenant.putIfAbsent(
+      normalizedTenantId,
+      () => <Item>[],
+    );
+    final updatedItem = item.copyWith(tenantId: normalizedTenantId);
+    final existingIndex = tenantItems.indexWhere((entry) => entry.id == updatedItem.id);
+    if (existingIndex >= 0) {
+      tenantItems[existingIndex] = updatedItem;
+    } else {
+      tenantItems.add(updatedItem);
+    }
+    return updatedItem;
   }
 
   List<Item> getItemsByCategory(String tenantId, String? category) {

@@ -120,6 +120,7 @@ class AppDataService {
     required double price,
     required String category,
     required String createdBy,
+    List<String> comboItems = const <String>[],
   }) async {
     final normalizedTenantId = tenantId.trim().toUpperCase();
     final normalizedName = name.trim();
@@ -131,6 +132,10 @@ class AppDataService {
       price: price,
       category: normalizedCategory,
       createdBy: createdBy.trim().isEmpty ? 'Operador' : createdBy.trim(),
+      comboItems: comboItems
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList(growable: false),
       createdAt: DateTime.now().toUtc(),
     );
 
@@ -157,6 +162,57 @@ class AppDataService {
       ],
     );
     return newItem;
+  }
+
+  Future<Item> updateCatalogItem({
+    required String tenantId,
+    required String itemId,
+    required String name,
+    required double price,
+    required String category,
+    required String createdBy,
+    List<String> comboItems = const <String>[],
+  }) async {
+    final normalizedTenantId = tenantId.trim().toUpperCase();
+    final normalizedName = name.trim();
+    final normalizedCategory = category.trim().isEmpty ? 'Geral' : category.trim();
+    final updatedItem = Item(
+      id: itemId,
+      tenantId: normalizedTenantId,
+      name: normalizedName,
+      price: price,
+      category: normalizedCategory,
+      createdBy: createdBy.trim().isEmpty ? 'Operador' : createdBy.trim(),
+      comboItems: comboItems
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList(growable: false),
+      createdAt: DateTime.now().toUtc(),
+    );
+
+    if (_firestore == null) {
+      final savedItem = _mockDataService.updateCatalogItem(updatedItem);
+      _catalogCacheByTenant[normalizedTenantId] =
+          _buildSortedCatalog(_mockDataService.getCatalogForTenant(normalizedTenantId));
+      _localCatalogController.add(savedItem.hashCode);
+      return savedItem;
+    }
+
+    await _firestore
+        .collection('tenants')
+        .doc(normalizedTenantId)
+        .collection('catalog')
+        .doc(updatedItem.id)
+        .set(updatedItem.toMap());
+    final cachedCatalog = _catalogCacheByTenant[normalizedTenantId] ??
+        _mockDataService.getCatalogForTenant(normalizedTenantId);
+    _catalogCacheByTenant[normalizedTenantId] = _buildSortedCatalog(
+      <Item>[
+        ...cachedCatalog.where((item) => item.id != updatedItem.id),
+        updatedItem,
+      ],
+    );
+    return updatedItem;
   }
 
   Future<void> seedCatalogIfNeeded(String tenantId, {required String createdBy}) async {
