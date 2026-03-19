@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_data_service.dart';
 import '../services/local_storage_service.dart';
-import '../services/mock_data_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({
@@ -12,7 +12,7 @@ class OnboardingScreen extends StatefulWidget {
     required this.onCompleted,
   });
 
-  final MockDataService dataService;
+  final AppDataService dataService;
   final LocalStorageService storageService;
   final String initialTenantId;
   final VoidCallback onCompleted;
@@ -25,6 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController tenantIdController;
   final TextEditingController nameController = TextEditingController();
   final TextEditingController cpfController = TextEditingController();
+  bool isSaving = false;
 
   @override
   void initState() {
@@ -41,23 +42,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
-    final tenantId = tenantIdController.text.trim();
-    final name = nameController.text.trim();
-    final cpf = cpfController.text.trim();
+    if (isSaving) {
+      return;
+    }
 
-    if (!widget.dataService.isValidTenant(tenantId)) {
+    final tenantId = widget.storageService
+        .normalizeTenantId(tenantIdController.text);
+    final name = widget.storageService
+        .normalizeEmployeeName(nameController.text);
+    final cpf = widget.storageService
+        .normalizeEmployeeCpf(cpfController.text);
+
+    final isTenantValid = await widget.dataService.isValidTenant(tenantId);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!isTenantValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tenant ID inválido.')),
       );
       return;
     }
 
-    if (name.isEmpty) {
+    if (name.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o nome do funcionário.')),
+        const SnackBar(
+          content: Text('Informe o nome do funcionário com pelo menos 3 caracteres.'),
+        ),
       );
       return;
     }
+
+    if (cpf.isNotEmpty && cpf.length < 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe um CPF válido ou deixe o campo vazio.')),
+      );
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+    });
 
     await widget.storageService.saveOnboarding(
       tenantId: tenantId,
@@ -76,7 +103,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Onboarding')),
+      appBar: AppBar(title: const Text('Onboarding do dispositivo')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -92,6 +119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 24),
             TextField(
               controller: tenantIdController,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(labelText: 'Tenant ID'),
             ),
             const SizedBox(height: 12),
@@ -111,8 +139,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _finishOnboarding,
-              child: const Text('Finalizar'),
+              onPressed: isSaving ? null : _finishOnboarding,
+              child: Text(isSaving ? 'Salvando...' : 'Finalizar'),
             ),
           ],
         ),

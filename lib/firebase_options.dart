@@ -1,13 +1,40 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 
 class DefaultFirebaseOptions {
-  static FirebaseOptions get currentPlatform => const FirebaseOptions(
-        apiKey: 'YOUR_API_KEY',
-        appId: 'YOUR_APP_ID',
-        messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-        projectId: 'YOUR_PROJECT_ID',
-        storageBucket: 'YOUR_STORAGE_BUCKET',
-        iosBundleId: 'com.example.lanchesimples',
-        androidClientId: 'YOUR_ANDROID_CLIENT_ID',
-      );
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyD_30VUqC4aNYZONz-TuElEtqxgKSbOW_I',
+    appId: '1:1026970483734:android:5807ac1247c05ef3af4937',
+    messagingSenderId: '1026970483734',
+    projectId: 'lanchesimples-d101b',
+    storageBucket: 'lanchesimples-d101b.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAJS3C3uZh2MM-oMIrumTRgrq64QSx7wAM',
+    appId: '1:1026970483734:ios:a6a2a65dd3bfac75af4937',
+    messagingSenderId: '1026970483734',
+    projectId: 'lanchesimples-d101b',
+    storageBucket: 'lanchesimples-d101b.firebasestorage.app',
+    iosBundleId: 'com.example.lanchesimples',
+  );
+
+  static bool get hasValidConfiguration {
+    final values = <String?>[
+      android.apiKey,
+      android.appId,
+      android.messagingSenderId,
+      android.projectId,
+      android.storageBucket,
+      ios.apiKey,
+      ios.appId,
+      ios.messagingSenderId,
+      ios.projectId,
+      ios.storageBucket,
+      ios.iosBundleId,
+    ];
+
+    return values.every(
+      (value) => value != null && value.isNotEmpty && !value.startsWith('YOUR_'),
+    );
+  }
 }
