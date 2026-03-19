@@ -348,7 +348,7 @@ class AppDataService {
       return updatedComanda;
     }
 
-    final comandaRef = _firestore!
+    final comandaRef = _firestore
         .collection('tenants')
         .doc(normalizedTenantId)
         .collection('comandas')
