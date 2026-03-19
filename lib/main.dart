@@ -152,7 +152,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
           return HomeScreen(
             dataService: dataService,
             storageService: storageService,
-            firebaseState: widget.firebaseState,
             onResetDevice: _refreshOnboardingStatus,
           );
         }

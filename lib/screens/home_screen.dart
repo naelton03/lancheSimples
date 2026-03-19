@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/comanda.dart';
-import '../models/firebase_initialization_state.dart';
 import '../models/item.dart';
 import '../services/app_data_service.dart';
 import '../services/local_storage_service.dart';
@@ -13,13 +12,11 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.dataService,
     required this.storageService,
-    required this.firebaseState,
     required this.onResetDevice,
   });
 
   final AppDataService dataService;
   final LocalStorageService storageService;
-  final FirebaseInitializationState firebaseState;
   final VoidCallback onResetDevice;
 
   @override
@@ -158,67 +155,147 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.onResetDevice();
   }
 
-  Future<void> _openCatalogCreationDialog({required bool isCombo}) async {
+  Future<void> _openCatalogCreationDialog({
+    required bool isCombo,
+    List<Item> catalogItems = const <Item>[],
+  }) async {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
     final categoryController = TextEditingController(
       text: isCombo ? 'Combos' : 'Lanches',
     );
+    final comboSourceItems = catalogItems
+        .where((item) => item.category.trim().toLowerCase() != 'combos')
+        .toList(growable: false);
+    final selectedComboItemIds = <String>{};
 
     final shouldCreate = await showDialog<bool>(
           context: context,
           builder: (context) {
-            return AlertDialog(
-              title: Text(isCombo ? 'Cadastrar combo' : 'Cadastrar item'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(
-                        labelText: isCombo ? 'Nome do combo' : 'Nome do item',
-                      ),
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                final selectedComboItems = comboSourceItems
+                    .where((item) => selectedComboItemIds.contains(item.id))
+                    .toList(growable: false);
+                final comboPrice = selectedComboItems.fold<double>(
+                  0,
+                  (sum, item) => sum + item.price,
+                );
+
+                return AlertDialog(
+                  title: Text(isCombo ? 'Cadastrar combo' : 'Cadastrar item'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        TextField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                            labelText: isCombo ? 'Nome do combo' : 'Nome do item',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (isCombo) ...<Widget>[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F9FB),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Text(
+                              selectedComboItems.isEmpty
+                                  ? 'Selecione itens existentes para formar o combo.'
+                                  : 'Preço calculado automaticamente: R\$ ${comboPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                              style: const TextStyle(color: AppTheme.subtitle),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Itens do combo',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          if (comboSourceItems.isEmpty)
+                            const Text(
+                              'Cadastre itens no catálogo antes de criar um combo.',
+                            )
+                          else
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 260),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: comboSourceItems.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final catalogItem = comboSourceItems[index];
+                                  final isSelected =
+                                      selectedComboItemIds.contains(catalogItem.id);
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    value: isSelected,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(catalogItem.name),
+                                    subtitle: Text(
+                                      'R\$ ${catalogItem.price.toStringAsFixed(2).replaceAll('.', ',')} • ${catalogItem.category}',
+                                    ),
+                                    onChanged: (value) {
+                                      setDialogState(() {
+                                        if (value == true) {
+                                          selectedComboItemIds.add(catalogItem.id);
+                                        } else {
+                                          selectedComboItemIds.remove(catalogItem.id);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                        ] else ...<Widget>[
+                          TextField(
+                            controller: priceController,
+                            decoration: const InputDecoration(
+                              labelText: 'Preço',
+                              hintText: 'Ex.: 19,90',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: categoryController,
+                            decoration: const InputDecoration(
+                              labelText: 'Categoria',
+                              hintText: 'Ex.: Lanches, Bebidas, Combos',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Cadastre itens rápidos com nome, preço, categoria e autoria do operador.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: priceController,
-                      decoration: const InputDecoration(
-                        labelText: 'Preço',
-                        hintText: 'Ex.: 19,90',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancelar'),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Categoria',
-                        hintText: 'Ex.: Lanches, Bebidas, Combos',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      isCombo
-                          ? 'Use esta opção para cadastrar ofertas promocionais como um item de catálogo do tipo combo.'
-                          : 'Cadastre itens rápidos com nome, preço, categoria e autoria do operador.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Salvar'),
                     ),
                   ],
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Salvar'),
-                ),
-              ],
+                );
+              },
             );
           },
         ) ??
@@ -232,9 +309,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final name = nameController.text.trim();
-    final rawPrice = priceController.text.trim().replaceAll(',', '.');
-    final category = categoryController.text.trim();
-    final price = double.tryParse(rawPrice);
+    final selectedComboItems = comboSourceItems
+        .where((item) => selectedComboItemIds.contains(item.id))
+        .toList(growable: false);
+    final category = isCombo ? 'Combos' : categoryController.text.trim();
+    final double? price = isCombo
+        ? selectedComboItems.fold<double>(
+            0,
+            (sum, item) => sum + item.price,
+          )
+        : double.tryParse(priceController.text.trim().replaceAll(',', '.'));
     nameController.dispose();
     priceController.dispose();
     categoryController.dispose();
@@ -243,7 +327,16 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (name.isEmpty || price == null || price <= 0) {
+    if (isCombo) {
+      if (name.isEmpty || selectedComboItems.isEmpty || price == null || price <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Informe o nome do combo e selecione itens válidos.'),
+          ),
+        );
+        return;
+      }
+    } else if (name.isEmpty || price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Informe nome e preço válido para cadastrar no catálogo.'),
@@ -256,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final item = await widget.dataService.createCatalogItem(
         tenantId: tenantId,
         name: name,
-        price: price,
+        price: price!,
         category: category,
         createdBy: employeeName,
       );
@@ -855,10 +948,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             await _resetDevice();
                           }
                           if (value == 'new_item') {
-                            await _openCatalogCreationDialog(isCombo: false);
+                            await _openCatalogCreationDialog(
+                              isCombo: false,
+                              catalogItems: allItems,
+                            );
                           }
                           if (value == 'new_combo') {
-                            await _openCatalogCreationDialog(isCombo: true);
+                            await _openCatalogCreationDialog(
+                              isCombo: true,
+                              catalogItems: allItems,
+                            );
                           }
                         },
                         itemBuilder: (context) => const <PopupMenuEntry<String>>[
@@ -881,26 +980,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   body: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: widget.dataService.isRemoteEnabled
-                              ? const Color(0xFFF0FFF4)
-                              : const Color(0xFFFFF5F5),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: widget.dataService.isRemoteEnabled
-                                ? const Color(0xFFC6F6D5)
-                                : const Color(0xFFFFD7D9),
-                          ),
-                        ),
-                        child: Text(
-                          widget.firebaseState.message,
-                          style: const TextStyle(color: AppTheme.subtitle),
-                        ),
-                      ),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
