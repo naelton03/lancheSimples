@@ -208,11 +208,39 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Text(
                               selectedComboItems.isEmpty
                                   ? 'Selecione itens existentes para formar o combo.'
-                                  : 'Preço calculado automaticamente: R\$ ${comboPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  : 'Itens selecionados somam R\$ ${comboPrice.toStringAsFixed(2).replaceAll('.', ',')}. Você pode usar esse valor ou informar outro preço para o combo.',
                               style: const TextStyle(color: AppTheme.subtitle),
                             ),
                           ),
                           const SizedBox(height: 12),
+                          TextField(
+                            controller: priceController,
+                            decoration: const InputDecoration(
+                              labelText: 'Preço do combo',
+                              hintText: 'Ex.: 24,90',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                          ),
+                          if (selectedComboItems.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  setDialogState(() {
+                                    priceController.text = comboPrice
+                                        .toStringAsFixed(2)
+                                        .replaceAll('.', ',');
+                                  });
+                                },
+                                icon: const Icon(Icons.auto_fix_high),
+                                label: const Text('Usar valor sugerido'),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
                           Text(
                             'Itens do combo',
                             style: Theme.of(context).textTheme.titleMedium,
@@ -313,12 +341,8 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((item) => selectedComboItemIds.contains(item.id))
         .toList(growable: false);
     final category = isCombo ? 'Combos' : categoryController.text.trim();
-    final double? price = isCombo
-        ? selectedComboItems.fold<double>(
-            0,
-            (sum, item) => sum + item.price,
-          )
-        : double.tryParse(priceController.text.trim().replaceAll(',', '.'));
+    final double? price =
+        double.tryParse(priceController.text.trim().replaceAll(',', '.'));
     nameController.dispose();
     priceController.dispose();
     categoryController.dispose();
@@ -331,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (name.isEmpty || selectedComboItems.isEmpty || price == null || price <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Informe o nome do combo e selecione itens válidos.'),
+            content: Text('Informe o nome, o preço do combo e selecione itens válidos.'),
           ),
         );
         return;
