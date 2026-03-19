@@ -373,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final item = await widget.dataService.createCatalogItem(
         tenantId: tenantId,
         name: name,
-        price: price!,
+        price: price,
         category: category,
         createdBy: employeeName,
       );
